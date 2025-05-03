@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Black Print - Register</title>
+   <!-- Bootstrap CSS -->
+   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+   <!-- Bootstrap Icons -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+   <!-- Google Font - Poppins -->
+   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+   <!-- Custom CSS file -->
+   <link rel="stylesheet" href="style.css">
+   <style>
+      body {
+         font-family: 'Poppins', sans-serif;
+         background-color: #f8f9fa;
+         background-image: linear-gradient(135deg, #1e1e2d 0%, #2b2b40 100%);
+         height: 100vh;
+         display: flex;
+         align-items: center;
+      }
+      .card {
+         border: none;
+         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15);
+      }
+      .card-header {
+         background-color: #171723;
+         border-bottom: none;
+      }
+      .logo-text {
+         font-weight: 700;
+         letter-spacing: 1px;
+      }
+      .logo-text .highlight {
+         color: #009ef7;
+      }
+      .btn-primary {
+         background-color: #009ef7;
+         border-color: #009ef7;
+      }
+      .btn-primary:hover, .btn-primary:focus {
+         background-color: #0095e8;
+         border-color: #0095e8;
+      }
+      a {
+         color: #009ef7;
+      }
+      a:hover {
+         color: #0095e8;
+      }
+   </style>
+</head>
+<body>
+   
+<div class="container">
+   <div class="row justify-content-center">
+      <div class="col-md-6 col-lg-5">
+         <div class="text-center mb-4">
+            <h1 class="logo-text text-white mb-4"><span class="highlight">Black</span> Print</h1>
+            <p class="text-white-50">Create your account</p>
+         </div>
+         <div class="card shadow-lg border-0 rounded-lg">
+            <div class="card-header text-white text-center py-3">
+               <h4 class="mb-0 fw-bold">Register</h4>
+            </div>
+            <div class="card-body p-4">
+               <div id="error-message" class="alert alert-danger" style="display: none;"></div>
+               <form id="registerForm">
+                  <div class="mb-3">
+                     <label for="name" class="form-label">Full Name</label>
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" class="form-control" id="name" required placeholder="Enter your name">
+                     </div>
+                  </div>
+                  <div class="mb-3">
+                     <label for="email" class="form-label">Email address</label>
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                        <input type="email" class="form-control" id="email" required placeholder="Enter your email">
+                     </div>
+                  </div>
+                  <div class="mb-3">
+                     <label for="password" class="form-label">Password</label>
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input type="password" class="form-control" id="password" required placeholder="Enter your password">
+                     </div>
+                  </div>
+                  <div class="mb-3">
+                     <label for="cpassword" class="form-label">Confirm Password</label>
+                     <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                        <input type="password" class="form-control" id="cpassword" required placeholder="Confirm your password">
+                     </div>
+                  </div>
+                  <div class="d-grid gap-2">
+                     <button type="submit" class="btn btn-primary btn-lg">Register Now</button>
+                  </div>
+               </form>
+            </div>
+            <div class="card-footer text-center py-3 bg-light">
+               <p class="mb-0">Already have an account? <a href="login.html" class="text-decoration-none fw-bold">Login Now</a></p>
+            </div>
+         </div>
+      </div>
+   </div>
+</div>
+
+<!-- Bootstrap JS Bundle with Popper -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Loading the Firebase JS SDK -->
+<script type="module" src="register.js"></script>
+</body>
+</html>

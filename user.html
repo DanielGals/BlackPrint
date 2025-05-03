@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Black Print Shop</title>
+   <!-- Bootstrap CSS -->
+   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+   <!-- Bootstrap Icons -->
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+   <!-- Font Awesome -->
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+   <!-- Google Font - Poppins -->
+   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+   <!-- Custom CSS file -->
+   <link rel="stylesheet" href="style.css">
+   <style>
+      body {
+         font-family: 'Poppins', sans-serif;
+         overflow-x: hidden;
+         background-color: #f8f9fa;
+      }
+      .sidebar {
+         position: fixed;
+         top: 0;
+         left: 0;
+         height: 100%;
+         width: 280px;
+         background-color: #1e1e2d;
+         transition: all 0.3s;
+         z-index: 1000;
+      }
+      .sidebar-header {
+         padding: 1.5rem 1rem;
+         color: white;
+         background-color: #171723;
+         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .logo-text {
+         font-weight: 700;
+         letter-spacing: 1px;
+      }
+      .logo-text .highlight {
+         color: #00c38d;
+      }
+      .sidebar .user-info {
+         padding: 1rem;
+         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+         background-color: #252536 !important;
+      }
+      .user-info .user-email {
+         color: rgba(255, 255, 255, 0.6);
+         font-size: 0.85rem;
+         margin-top: 5px;
+      }
+      .sidebar-menu {
+         padding: 1rem 0;
+         list-style: none;
+         margin: 0;
+      }
+      .sidebar-menu li {
+         padding: 0.75rem 1.5rem;
+         color: rgba(255, 255, 255, 0.7);
+         cursor: pointer;
+         transition: all 0.2s;
+         display: flex;
+         align-items: center;
+         position: relative;
+      }
+      .sidebar-menu li i {
+         margin-right: 10px;
+         width: 20px;
+         text-align: center;
+      }
+      .sidebar-menu li:hover {
+         background-color: rgba(0, 195, 141, 0.1);
+         color: #fff;
+      }
+      .sidebar-menu li.active {
+         background-color: rgba(0, 195, 141, 0.2);
+         color: #00c38d;
+         position: relative;
+      }
+      .sidebar-menu li.active::before {
+         content: '';
+         position: absolute;
+         left: 0;
+         top: 0;
+         height: 100%;
+         width: 4px;
+         background-color: #00c38d;
+      }
+      .main-content {
+         margin-left: 280px;
+         padding: 20px;
+         width: calc(100% - 280px);
+      }
+      .page-container {
+         padding: 25px;
+         background-color: white;
+         border-radius: 10px;
+         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.05);
+         width: 100%;
+      }
+      .hidden {
+         display: none;
+      }
+      /* Improved item card styling */
+      .items-catalog {
+         display: flex;
+         flex-wrap: wrap;
+         margin: 0 -15px;
+      }
+      .items-catalog > div {
+         padding: 15px;
+         display: flex;
+      }
+      .item-card {
+         transition: transform 0.3s, box-shadow 0.3s;
+         height: 100%;
+         width: 100%;
+         border: none;
+         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.05);
+         display: flex;
+         flex-direction: column;
+      }
+      .item-card:hover {
+         transform: translateY(-5px);
+         box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+      .item-card .card-img-top {
+         height: 200px;
+         object-fit: cover;
+         border-top-left-radius: 10px;
+         border-top-right-radius: 10px;
+      }
+      .item-card .card-body {
+         display: flex;
+         flex-direction: column;
+         flex-grow: 1;
+         padding: 1.25rem;
+      }
+      .item-card .card-title {
+         font-weight: 600;
+         margin-bottom: 0.75rem;
+         height: 48px;
+         overflow: hidden;
+         display: -webkit-box;
+         -webkit-line-clamp: 2;
+         -webkit-box-orient: vertical;
+      }
+      .item-card .btn {
+         margin-top: auto;
+      }
+      .cart-item {
+         border-bottom: 1px solid #e9e9e9;
+         padding: 15px 0;
+      }
+      .card {
+         border: none;
+         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.05);
+      }
+      .card-header {
+         font-weight: 600;
+      }
+      .btn-success {
+         background-color: #00c38d;
+         border-color: #00c38d;
+      }
+      .btn-success:hover, .btn-success:focus, .btn-success:active {
+         background-color: #00a478 !important;
+         border-color: #00a478 !important;
+      }
+      .btn-outline-success {
+         border-color: #00c38d;
+         color: #00c38d;
+      }
+      .btn-outline-success:hover {
+         background-color: #00c38d;
+         border-color: #00c38d;
+      }
+      .text-success {
+         color: #00c38d !important;
+      }
+      /* Notification style for added to cart message - updated to match admin alerts */
+      .notification {
+         position: fixed;
+         top: 20px;
+         right: 20px;
+         max-width: 350px;
+         background-color: #d1e7dd;
+         color: #0f5132;
+         padding: 10px 15px;
+         border-radius: 4px;
+         border: 1px solid #badbcc;
+         box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
+         z-index: 1100;
+         animation: fadeIn 0.3s ease-in, fadeOut 0.3s ease-out 2.7s forwards;
+         display: flex;
+         align-items: center;
+      }
+      
+      /* Order Success Modal - Enhanced and less compressed */
+      .order-success-modal {
+         position: fixed;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         max-width: 500px;
+         width: 90%;
+         background-color: white;
+         border-radius: 12px;
+         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+         z-index: 1100;
+         padding: 30px;
+         text-align: center;
+         animation: zoomIn 0.3s ease-out;
+      }
+      
+      .order-success-icon {
+         font-size: 70px;
+         color: #00c38d;
+         margin-bottom: 25px;
+         display: inline-block;
+      }
+      
+      .order-success-title {
+         font-size: 24px;
+         font-weight: 600;
+         margin-bottom: 15px;
+         color: #333;
+      }
+      
+      .order-success-message {
+         font-size: 16px;
+         color: #555;
+         margin-bottom: 25px;
+         line-height: 1.5;
+      }
+      
+      .order-success-buttons {
+         display: flex;
+         justify-content: center;
+         gap: 15px;
+         margin-top: 10px;
+      }
+      
+      .order-success-button {
+         padding: 12px 25px;
+         border-radius: 6px;
+         font-weight: 500;
+         font-size: 16px;
+         transition: all 0.2s;
+         border: none;
+      }
+      
+      .view-orders-btn {
+         background-color: #00c38d;
+         color: white;
+      }
+      
+      .view-orders-btn:hover {
+         background-color: #00a478;
+      }
+      
+      .continue-shopping-btn {
+         background-color: #f0f0f0;
+         color: #333;
+      }
+      
+      .continue-shopping-btn:hover {
+         background-color: #e0e0e0;
+      }
+      
+      @keyframes fadeIn {
+         0% { opacity: 0; transform: translateY(-20px); }
+         100% { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes fadeOut {
+         0% { opacity: 1; transform: translateY(0); }
+         100% { opacity: 0; transform: translateY(-20px); }
+      }
+      @keyframes zoomIn {
+         from {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.8);
+         }
+         to {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+         }
+      }
+      @media (max-width: 768px) {
+         .sidebar {
+            width: 70px;
+         }
+         .sidebar-header h2, .sidebar-menu li span, .user-info .user-email {
+            display: none;
+         }
+         .user-info {
+            text-align: center;
+            padding: 10px 5px;
+         }
+         .sidebar-menu li {
+            padding: 15px;
+            justify-content: center;
+         }
+         .sidebar-menu li i {
+            margin-right: 0;
+            font-size: 18px;
+         }
+         .main-content {
+            margin-left: 70px;
+            width: calc(100% - 70px);
+         }
+         .items-catalog > div {
+            padding: 10px;
+         }
+      }
+      .cart-badge {
+         position: absolute;
+         top: 5px;
+         right: 10px;
+         background-color: #dc3545;
+         color: white;
+         border-radius: 50%;
+         padding: 0.25rem 0.5rem;
+         font-size: 0.75rem;
+      }
+      /* Amazon-style cart success modal */
+      .cart-success-modal {
+         position: fixed;
+         top: 0;
+         left: 0;
+         right: 0;
+         background-color: white;
+         border-bottom: 1px solid #ddd;
+         padding: 15px;
+         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+         z-index: 1050;
+         animation: slideDown 0.3s ease-out;
+         display: flex;
+         align-items: center;
+         justify-content: space-between;
+      }
+      
+      .cart-success-content {
+         display: flex;
+         align-items: center;
+         flex: 1;
+      }
+      
+      .cart-success-check {
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         width: 24px;
+         height: 24px;
+         background-color: #00c38d;
+         border-radius: 50%;
+         margin-right: 12px;
+         flex-shrink: 0;
+      }
+      
+      .cart-success-check i {
+         color: white;
+         font-size: 14px;
+      }
+      
+      .cart-success-message {
+         flex-grow: 1;
+      }
+      
+      .cart-success-message h4 {
+         margin: 0 0 5px 0;
+         color: #00c38d;
+         font-size: 16px;
+         font-weight: 600;
+      }
+      
+      .cart-success-message p {
+         margin: 0;
+         font-size: 14px;
+         color: #555;
+      }
+      
+      .cart-success-actions {
+         display: flex;
+         align-items: center;
+         gap: 10px;
+         margin-left: 15px;
+      }
+      
+      @keyframes slideDown {
+         from {
+            transform: translateY(-100%);
+         }
+         to {
+            transform: translateY(0);
+         }
+      }
+      
+      /* Close button for modal */
+      .cart-success-close {
+         background: none;
+         border: none;
+         color: #888;
+         cursor: pointer;
+         padding: 5px;
+         font-size: 18px;
+         line-height: 1;
+      }
+      
+      .cart-success-close:hover {
+         color: #333;
+      }
+      
+      /* Cart success modal buttons */
+      .cart-view-btn, .cart-checkout-btn {
+         padding: 8px 15px;
+         border-radius: 4px;
+         font-weight: 500;
+         text-decoration: none;
+         font-size: 14px;
+         cursor: pointer;
+         border: none;
+      }
+      
+      .cart-view-btn {
+         background-color: #f0f0f0;
+         color: #333;
+         border: 1px solid #ddd;
+      }
+      
+      .cart-checkout-btn {
+         background-color: #00c38d;
+         color: white;
+      }
+      
+      .cart-view-btn:hover {
+         background-color: #e5e5e5;
+      }
+      
+      .cart-checkout-btn:hover {
+         background-color: #00a478;
+      }
+      
+      /* Enhanced cart view styles */
+      .cart-container {
+         max-width: 1200px;
+         margin: 0 auto;
+      }
+      
+      .cart-item {
+         display: flex;
+         align-items: center;
+         padding: 15px;
+         border-radius: 8px;
+         margin-bottom: 15px;
+         background-color: white;
+         border: 1px solid rgba(0,0,0,0.05);
+         transition: all 0.2s ease;
+      }
+      
+      .cart-item:hover {
+         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+         transform: translateY(-2px);
+      }
+      
+      .cart-item-details {
+         flex-grow: 1;
+      }
+      
+      .cart-controls {
+         display: flex;
+         align-items: center;
+         gap: 10px;
+      }
+      
+      .quantity-control {
+         display: flex;
+         align-items: center;
+         border: 1px solid #e0e0e0;
+         border-radius: 4px;
+         padding: 2px;
+      }
+      
+      .quantity-control button {
+         width: 30px;
+         height: 30px;
+         border: none;
+         background: none;
+         font-size: 14px;
+         cursor: pointer;
+         display: flex;
+         justify-content: center;
+         align-items: center;
+      }
+      
+      .quantity-control button:hover {
+         background-color: #f5f5f5;
+      }
+      
+      .quantity-control span {
+         padding: 0 10px;
+         font-weight: 500;
+      }
+      
+      .remove-item-btn {
+         color: #dc3545;
+         background: none;
+         border: none;
+         padding: 8px;
+         cursor: pointer;
+         transition: all 0.2s;
+      }
+      
+      .remove-item-btn:hover {
+         background-color: rgba(220, 53, 69, 0.1);
+         border-radius: 4px;
+      }
+      
+      .summary-card {
+         position: sticky;
+         top: 20px;
+         border-radius: 8px;
+         overflow: hidden;
+      }
+      
+      .cart-footer {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         margin-top: 20px;
+      }
+      
+      /* Orders page styling */
+      .orders-list {
+         display: flex;
+         flex-direction: column;
+         gap: 16px;
+      }
+      
+      .order-card {
+         border: 1px solid rgba(0,0,0,0.05);
+         border-radius: 8px;
+         overflow: hidden;
+         transition: all 0.2s ease;
+      }
+      
+      .order-card:hover {
+         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+         transform: translateY(-2px);
+      }
+      
+      .order-header {
+         display: flex;
+         justify-content: space-between;
+         align-items: center;
+         padding: 15px;
+         background-color: #f8f9fa;
+         border-bottom: 1px solid rgba(0,0,0,0.05);
+      }
+      
+      .order-number {
+         font-weight: 600;
+         color: #333;
+      }
+      
+      .order-date {
+         color: #6c757d;
+         font-size: 0.9rem;
+      }
+      
+      .order-status {
+         font-weight: 500;
+         text-transform: uppercase;
+         font-size: 0.8rem;
+         padding: 4px 8px;
+         border-radius: 4px;
+      }
+      
+      .order-status.pending {
+         background-color: #fff3cd;
+         color: #856404;
+      }
+      
+      .order-status.processing {
+         background-color: #cff4fc;
+         color: #055160;
+      }
+      
+      .order-status.shipped {
+         background-color: #cce5ff;
+         color: #004085;
+      }
+      
+      .order-status.finished {
+         background-color: #d1e7dd;
+         color: #0f5132;
+      }
+      
+      .order-status.cancelled {
+         background-color: #f8d7da;
+         color: #842029;
+      }
+      
+      .order-details {
+         padding: 15px;
+      }
+      
+      .order-items {
+         margin-bottom: 15px;
+      }
+      
+      .order-item {
+         display: flex;
+         justify-content: space-between;
+         margin-bottom: 8px;
+         padding-bottom: 8px;
+         border-bottom: 1px solid #f0f0f0;
+      }
+      
+      .order-item:last-child {
+         border-bottom: none;
+         margin-bottom: 0;
+         padding-bottom: 0;
+      }
+      
+      .order-item-name {
+         flex: 1;
+      }
+      
+      .order-item-qty {
+         margin: 0 15px;
+         color: #6c757d;
+      }
+      
+      .order-total {
+         display: flex;
+         justify-content: space-between;
+         font-weight: 600;
+         margin-top: 10px;
+         border-top: 1px solid #e9e9e9;
+         padding-top: 15px;
+      }
+      
+      .delivery-info {
+         margin-top: 15px;
+         padding-top: 15px;
+         border-top: 1px dashed #e9e9e9;
+      }
+      
+      .delivery-address {
+         background-color: #f8f9fa;
+         padding: 10px 15px;
+         border-radius: 6px;
+         font-size: 0.9rem;
+         margin-top: 10px;
+      }
+   </style>
+</head>
+<body>
+   
+   <div class="sidebar">
+      <div class="sidebar-header">
+         <h2 class="logo-text mb-0"><span class="highlight">Black</span> Print</h2>
+      </div>
+      <div class="user-info">
+         <div class="user-name fw-bold text-white" id="sidebar-user-name">User</div>
+         <div class="user-email" id="user-email">user@example.com</div>
+      </div>
+      <ul class="sidebar-menu">
+         <li class="active" data-page="home"><i class="fas fa-home"></i> <span>Home</span></li>
+         <li data-page="cart"><i class="fas fa-shopping-cart"></i> <span>Cart</span> <span class="cart-badge" id="cart-count">0</span></li>
+         <li data-page="orders"><i class="fas fa-box"></i> <span>Orders</span></li>
+         <li id="sidebar-logout"><i class="fas fa-sign-out-alt"></i> <span>Logout</span></li>
+      </ul>
+   </div>
+
+   <div class="main-content user-page">
+      <div class="page-container" id="home-page">
+         <div class="content">
+            <nav aria-label="breadcrumb">
+               <ol class="breadcrumb">
+                  <li class="breadcrumb-item active" aria-current="page">Home</li>
+               </ol>
+            </nav>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+               <div>
+                  <h1 class="display-6">Welcome, <span id="user-name" class="text-success fw-bold"></span></h1>
+                  <p class="text-muted">Browse our collection of products</p>
+               </div>
+               <div class="d-flex">
+                  <div class="input-group" style="width: 300px;">
+                     <input type="text" class="form-control" id="search-items" placeholder="Search products...">
+                     <button class="btn btn-outline-success" type="button"><i class="fas fa-search"></i></button>
+                  </div>
+               </div>
+            </div>
+            
+            <div class="row mb-4">
+               <div class="col-lg-12">
+                  <div class="card border-0 bg-light">
+                     <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-tag me-2"></i>Featured Products</h5>
+                        <p class="card-text">Check out our latest collection of products.</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+            
+
+            
+            <div class="row items-catalog g-4">
+               <!-- Available items will be dynamically inserted here -->
+               <!-- Example item card for visualization -->
+               <div class="col-md-6 col-lg-4 col-xl-3">
+                  <div class="card item-card">
+                     <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                           <span class="badge bg-success me-2">In Stock</span>
+                           <small class="text-muted">12 available</small>
+                        </div>
+                        <h5 class="card-title">Product Name</h5>
+                        <p class="card-text text-muted small">Product description goes here</p>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                           <span class="text-success fw-bold">₱19.99</span>
+                        </div>
+                        <button class="btn btn-success w-100 add-to-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+      
+      <div class="page-container hidden" id="cart-page">
+         <div class="content">
+            <nav aria-label="breadcrumb">
+               <ol class="breadcrumb">
+                  <li class="breadcrumb-item"><a href="#" data-page="home">Home</a></li>
+                  <li class="breadcrumb-item active" aria-current="page">Cart</li>
+               </ol>
+            </nav>
+            <h3 class="mb-4"><i class="fas fa-shopping-cart me-2"></i>Your Shopping Cart</h3>
+            
+            <div class="row cart-container">
+               <div class="col-lg-9">
+                  <div class="card mb-4">
+                     <div class="card-header bg-light d-flex align-items-center">
+                        <i class="fas fa-shopping-basket me-2"></i>
+                        <h5 class="mb-0">Cart Items</h5>
+                     </div>
+                     <div class="card-body">
+                        <div class="cart-items">
+                           <!-- Cart items will be dynamically inserted here -->
+                        </div>
+                        <div class="text-center mt-4" id="empty-cart-message">
+                           <i class="fas fa-shopping-cart mb-3" style="font-size: 48px; color: #ccc;"></i>
+                           <p>Your cart is empty</p>
+                           <a href="#" data-page="home" class="btn btn-outline-success">
+                              <i class="fas fa-arrow-left me-2"></i>Continue Shopping
+                           </a>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               
+               <div class="col-lg-3">
+                  <div class="card summary-card">
+                     <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Order Summary</h5>
+                     </div>
+                     <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                           <span>Subtotal</span>
+                           <span id="cart-subtotal">₱0.00</span>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between fw-bold">
+                           <span>Total</span>
+                           <span id="cart-total">₱0.00</span>
+                        </div>
+                        <div class="d-grid gap-2 mt-4">
+                           <button id="checkout-btn" class="btn btn-success">
+                              <i class="fas fa-check-circle me-2"></i>Proceed to Checkout
+                           </button>
+                        </div>
+                        <div class="mt-3 text-center">
+                           <a href="#" data-page="home" class="text-decoration-none">
+                              <i class="fas fa-arrow-left me-1"></i> Continue Shopping
+                           </a>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+      
+      <div class="page-container hidden" id="orders-page">
+         <div class="content">
+            <nav aria-label="breadcrumb">
+               <ol class="breadcrumb">
+                  <li class="breadcrumb-item"><a href="#" data-page="home">Home</a></li>
+                  <li class="breadcrumb-item active" aria-current="page">Orders</li>
+               </ol>
+            </nav>
+            <h3 class="mb-4"><i class="fas fa-box me-2"></i>Your Orders</h3>
+            
+            <div class="row mb-4">
+               <div class="col-md-12">
+                  <div class="alert alert-info d-flex align-items-center" role="alert">
+                     <i class="fas fa-info-circle me-2"></i>
+                     <div>
+                        <strong>Delivery Information:</strong> Orders marked as "Finished" are being prepared for delivery. Please expect delivery within 3-5 days.
+                     </div>
+                  </div>
+               </div>
+            </div>
+            
+            <div class="card">
+               <div class="card-header bg-light d-flex align-items-center">
+                  <i class="fas fa-list me-2"></i>
+                  <h5 class="mb-0">Order History</h5>
+               </div>
+               <div class="card-body">
+                  <div id="orders-list" class="orders-list">
+                     <!-- Orders will be dynamically inserted here -->
+                  </div>
+                  <div class="text-center mt-4" id="empty-orders-message">
+                     <i class="fas fa-box-open mb-3" style="font-size: 48px; color: #ccc;"></i>
+                     <p>You don't have any orders yet</p>
+                     <a href="#" data-page="home" class="btn btn-outline-success">
+                        <i class="fas fa-shopping-cart me-2"></i>Start Shopping
+                     </a>
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+      
+      <!-- Checkout Address Modal -->
+      <div class="modal fade" id="addressModal" tabindex="-1" aria-labelledby="addressModalLabel" aria-hidden="true">
+         <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+               <div class="modal-header bg-success text-white">
+                  <h5 class="modal-title" id="addressModalLabel"><i class="fas fa-shipping-fast me-2"></i>Shipping Information</h5>
+                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+               </div>
+               <div class="modal-body">
+                  <form id="shipping-form">
+                     <div class="row mb-3">
+                        <div class="col-md-6">
+                           <label for="checkout-name" class="form-label">Full Name</label>
+                           <input type="text" class="form-control" id="checkout-name" readonly>
+                        </div>
+                        <div class="col-md-6">
+                           <label for="checkout-email" class="form-label">Email</label>
+                           <input type="email" class="form-control" id="checkout-email" readonly>
+                        </div>
+                     </div>
+                     
+                     <div class="mb-3">
+                        <label for="checkout-address" class="form-label">Street Address</label>
+                        <input type="text" class="form-control" id="checkout-address" required placeholder="Enter your street address">
+                     </div>
+                     
+                     <div class="row mb-3">
+                        <div class="col-md-4">
+                           <label for="checkout-city" class="form-label">City</label>
+                           <input type="text" class="form-control" id="checkout-city" required placeholder="City">
+                        </div>
+                        <div class="col-md-4">
+                           <label for="checkout-province" class="form-label">Province/State</label>
+                           <input type="text" class="form-control" id="checkout-province" required placeholder="Province/State">
+                        </div>
+                        <div class="col-md-4">
+                           <label for="checkout-zip" class="form-label">ZIP/Postal Code</label>
+                           <input type="text" class="form-control" id="checkout-zip" required placeholder="ZIP Code">
+                        </div>
+                     </div>
+                     
+                     <div class="mb-3">
+                        <label for="checkout-phone" class="form-label">Phone Number</label>
+                        <input type="tel" class="form-control" id="checkout-phone" required placeholder="Enter your phone number">
+                     </div>
+                     
+                     <div class="mb-3">
+                        <label class="form-label">Order Summary</label>
+                        <div class="card">
+                           <div class="card-body">
+                              <div class="d-flex justify-content-between mb-2">
+                                 <span>Items</span>
+                                 <span id="modal-items-count">0 items</span>
+                              </div>
+                              <div class="d-flex justify-content-between mb-2">
+                                 <span>Total Amount</span>
+                                 <span id="modal-total" class="fw-bold">₱0.00</span>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  </form>
+               </div>
+               <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button type="button" class="btn btn-success" id="confirm-checkout-btn">
+                     <i class="fas fa-check-circle me-2"></i>Confirm Order
+                  </button>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+
+   <!-- Bootstrap JS Bundle with Popper -->
+   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+   <!-- Loading the Firebase JS SDK -->
+   <script type="module" src="user.js"></script>
+</body>
+</html>
