@@ -447,9 +447,13 @@ document.addEventListener('DOMContentLoaded', () => {
           
           const tbody = usersTable.querySelector('tbody');
           let foundUsers = false;
-          
-          userQuerySnapshot.forEach((doc) => {
+            userQuerySnapshot.forEach((doc) => {
             const user = doc.data();
+            
+            // Skip super_admin users as requested - they should not appear in the users list
+            if (user.user_type === 'super_admin') {
+              return;
+            }
             
             // Apply search filter if present
             if (searchTerm && 
