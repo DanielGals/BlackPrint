@@ -429,13 +429,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const userQuerySnapshot = await getDocs(usersCollection);
         
         if (!userQuerySnapshot.empty) {
-          const usersTable = document.createElement('table');
-          usersTable.innerHTML = `
+          const usersTable = document.createElement('table');          usersTable.innerHTML = `
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Email</th>
                 <th>User Type</th>
+                <th>Status</th>
                 <th>Created Date</th>
                 <th>Last Login</th>
                 ${isSuperAdmin ? '<th>Actions</th>' : ''}
@@ -470,11 +470,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const emailCell = document.createElement('td');
             emailCell.textContent = user.email || 'No email';
             row.appendChild(emailCell);
-            
-            // User type cell
+              // User type cell
             const typeCell = document.createElement('td');
             typeCell.textContent = user.user_type || 'user';
             row.appendChild(typeCell);
+            
+            // Status cell
+            const statusCell = document.createElement('td');
+            if (user.status === 'deactivated') {
+              statusCell.innerHTML = '<span class="badge bg-danger">Deactivated</span>';
+            } else {
+              statusCell.innerHTML = '<span class="badge bg-success">Active</span>';
+            }
+            row.appendChild(statusCell);
             
             // Created date cell
             const createdCell = document.createElement('td');
@@ -500,12 +508,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isSuperAdmin) {
               const actionsCell = document.createElement('td');
               actionsCell.className = 'action-buttons';
-              
-              const deleteBtn = document.createElement('button');
-              deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-              deleteBtn.className = 'btn-delete';
-              deleteBtn.title = 'Delete User';
-              deleteBtn.addEventListener('click', () => deleteUser(doc.id, user.name));
+                const deleteBtn = document.createElement('button');
+              // If user is already deactivated, show "Activate" button
+              if (user.status === 'deactivated') {
+                deleteBtn.innerHTML = '<i class="fas fa-user-check"></i>';
+                deleteBtn.className = 'btn-activate';
+                deleteBtn.title = 'Activate User';
+                deleteBtn.addEventListener('click', () => activateUser(doc.id, user.name));
+              } else {
+                deleteBtn.innerHTML = '<i class="fas fa-user-slash"></i>';
+                deleteBtn.className = 'btn-deactivate';
+                deleteBtn.title = 'Deactivate User';
+                deleteBtn.addEventListener('click', () => deleteUser(doc.id, user.name));
+              }
               
               const editBtn = document.createElement('button');
               editBtn.innerHTML = '<i class="fas fa-edit"></i>';
@@ -542,13 +557,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }
-  
-  // Delete user function for super admin
+  // Deactivate user function for super admin (previously delete function)
   async function deleteUser(userId, userName) {
-    if (confirm(`Are you sure you want to delete the user ${userName}?`)) {
+    if (confirm(`Are you sure you want to deactivate the user ${userName}? Deactivated users will not be able to login.`)) {
       try {
-        await deleteDoc(doc(db, "users", userId));
-        alert(`User ${userName} has been deleted.`);
+        // Update the user document instead of deleting it
+        await updateDoc(doc(db, "users", userId), {
+          status: 'deactivated',
+          deactivatedAt: serverTimestamp(),
+          deactivatedBy: auth.currentUser.uid
+        });
+        
+        alert(`User ${userName} has been deactivated.`);
         
         // Reload the user list
         const currentUser = auth.currentUser;
@@ -560,8 +580,37 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       } catch (error) {
-        console.error("Error deleting user:", error);
-        alert(`Error deleting user: ${error.message}`);
+        console.error("Error deactivating user:", error);
+        alert(`Error deactivating user: ${error.message}`);
+      }
+    }
+  }
+  
+  // Activate user function for super admin
+  async function activateUser(userId, userName) {
+    if (confirm(`Are you sure you want to reactivate the user ${userName}? They will be able to login again.`)) {
+      try {
+        // Update the user document to remove deactivated status
+        await updateDoc(doc(db, "users", userId), {
+          status: 'active',
+          activatedAt: serverTimestamp(),
+          activatedBy: auth.currentUser.uid
+        });
+        
+        alert(`User ${userName} has been reactivated.`);
+        
+        // Reload the user list
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            loadUsers(userDocSnap.data().user_type === 'super_admin');
+          }
+        }
+      } catch (error) {
+        console.error("Error activating user:", error);
+        alert(`Error activating user: ${error.message}`);
       }
     }
   }

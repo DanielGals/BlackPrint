@@ -14,9 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const docRef = doc(db, "users", user.uid);
         const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
+          if (docSnap.exists()) {
           const userData = docSnap.data();
+          
+          // Check if user is deactivated
+          if (userData.status === 'deactivated') {
+            // Sign out the user
+            await auth.signOut();
+            errorMessage.textContent = "This account has been deactivated. Please contact the administrator.";
+            errorMessage.style.display = 'block';
+            return;
+          }
+          
           if (userData.user_type === 'super_admin' || userData.user_type === 'admin') {
             window.location.href = 'admin.html';
           } else {
@@ -60,9 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
       // Check user role in Firestore
       const docRef = doc(db, "users", user.uid);
       const docSnap = await getDoc(docRef);
-      
-      if (docSnap.exists()) {
+        if (docSnap.exists()) {
         const userData = docSnap.data();
+        
+        // Check if user is deactivated
+        if (userData.status === 'deactivated') {
+          // Sign out the user
+          await auth.signOut();
+          errorMessage.textContent = "This account has been deactivated. Please contact the administrator.";
+          errorMessage.style.display = 'block';
+          return;
+        }
         
         // Update last login timestamp
         await setDoc(doc(db, "users", user.uid), {
