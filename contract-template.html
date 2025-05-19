@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rental Agreement Contract</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    .contract-container {
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 40px;
+      border: 1px solid #ddd;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 10px;
+    }
+    .logo {
+      font-weight: bold;
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 20px 0 10px;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .info-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+    .info-label {
+      width: 180px;
+      font-weight: bold;
+    }
+    .info-value {
+      flex: 1;
+    }
+    .terms {
+      margin: 20px 0;
+    }
+    .signatures {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .signature-box {
+      border-top: 1px solid #000;
+      width: 45%;
+      padding-top: 5px;
+      text-align: center;
+    }
+    .date {
+      margin-top: 30px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="contract-container">
+    <div class="header">
+      <div class="logo">Black Print Shop</div>
+      <div>Equipment Rental Agreement</div>
+    </div>
+
+    <div class="section">
+      <div class="title">RENTAL INFORMATION</div>
+      <div class="info-row">
+        <div class="info-label">Date Issued:</div>
+        <div class="info-value" id="contract-date-issued"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Contract Number:</div>
+        <div class="info-value" id="contract-number"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="title">RENTER INFORMATION</div>
+      <div class="info-row">
+        <div class="info-label">Full Name:</div>
+        <div class="info-value" id="contract-name"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Email:</div>
+        <div class="info-value" id="contract-email"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Phone Number:</div>
+        <div class="info-value" id="contract-phone"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Address:</div>
+        <div class="info-value" id="contract-address"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="title">EQUIPMENT INFORMATION</div>
+      <div class="info-row">
+        <div class="info-label">Item Name:</div>
+        <div class="info-value" id="contract-item-name"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Pickup Date:</div>
+        <div class="info-value" id="contract-start-date"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Return Date:</div>
+        <div class="info-value" id="contract-end-date"></div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Pickup Location:</div>
+        <div class="info-value">G/F & 2/F 8129-C SGT.F.YABUT ST., GUADALUPE NUEVO</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Additional Notes:</div>
+        <div class="info-value" id="contract-notes"></div>
+      </div>
+    </div>
+
+    <div class="terms">
+      <div class="title">RENTAL TERMS AND CONDITIONS</div>
+      <p>1. <strong>Rental Period:</strong> The rental period begins on the pickup date and ends on the return date specified in this agreement.</p>
+      <p>2. <strong>Pickup Location:</strong> All equipment must be picked up and returned to our shop located at G/F & 2/F 8129-C SGT.F.YABUT ST., GUADALUPE NUEVO.</p>
+      <p>3. <strong>Pricing:</strong> Rental prices are determined upon pickup and may vary based on item condition and rental duration.</p>
+      <p>4. <strong>Late Returns:</strong> Late returns may incur additional fees. Please contact us if you need to extend your rental period.</p>
+      <p>5. <strong>Damages:</strong> The renter is responsible for any damages beyond normal wear and tear.</p>
+      <p>6. <strong>Identification:</strong> Valid identification will be required at pickup.</p>
+      <p>By signing below, the renter acknowledges that they have read, understood, and agree to abide by the terms and conditions outlined in this rental agreement.</p>
+    </div>
+
+    <div class="signatures">
+      <div class="signature-box">
+        <div>Black Print Shop Representative</div>
+      </div>
+      <div class="signature-box">
+        <div>Renter Signature</div>
+      </div>
+    </div>
+
+    <div class="date">
+      <div>Date: <span id="contract-signature-date"></span></div>
+    </div>
+  </div>
+</body>
+</html>
