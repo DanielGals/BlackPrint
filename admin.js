@@ -746,6 +746,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemPrice = parseFloat(itemForm.elements['item-price'].value);
         const itemQuantity = parseInt(itemForm.elements['item-quantity'].value);
         const itemAlertLevel = parseInt(itemForm.elements['item-alert-level'].value);
+        // Get item type (sell or rent) from radio buttons
+        const itemType = document.querySelector('input[name="item-type"]:checked').value;
         
         try {
           // Add the item to the items collection
@@ -754,6 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             description: itemDescription,
             price: itemPrice,
             alertLevel: itemAlertLevel,
+            itemType: itemType, // New field for item type
             createdAt: serverTimestamp()
           });
           
@@ -818,6 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <th><i class="fas fa-box me-1"></i> Item Name</th>
                   <th><i class="fas fa-align-left me-1"></i> Description</th>
                   <th><i class="fas fa-tag me-1"></i> Price</th>
+                  <th><i class="fas fa-exchange-alt me-1"></i> Type</th>
                   <th><i class="fas fa-cubes me-1"></i> Quantity</th>
                   <th><i class="fas fa-exclamation-triangle me-1"></i> Alert Level</th>
                   <th><i class="fas fa-info-circle me-1"></i> Status</th>
@@ -862,6 +866,21 @@ document.addEventListener('DOMContentLoaded', () => {
               const priceCell = document.createElement('td');
               priceCell.textContent = `₱${item.price.toFixed(2)}`;
               row.appendChild(priceCell);
+              
+              // Item type cell
+              const typeCell = document.createElement('td');
+              if (item.itemType === 'rent') {
+                const typeBadge = document.createElement('span');
+                typeBadge.className = 'badge bg-info';
+                typeBadge.textContent = 'For Rent';
+                typeCell.appendChild(typeBadge);
+              } else {
+                const typeBadge = document.createElement('span');
+                typeBadge.className = 'badge bg-primary';
+                typeBadge.textContent = 'For Sale';
+                typeCell.appendChild(typeBadge);
+              }
+              row.appendChild(typeCell);
               
               // Quantity cell
               const quantityCell = document.createElement('td');
@@ -946,6 +965,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('edit-item-quantity').value = currentQuantity;
       document.getElementById('edit-item-alert-level').value = itemData.alertLevel;
       
+      // Set item type radio buttons based on stored value
+      if(itemData.itemType === 'rent') {
+        document.getElementById('edit-item-type-rent').checked = true;
+      } else {
+        // Default to "sell" if not specified or is "sell"
+        document.getElementById('edit-item-type-sell').checked = true;
+      }
+      
       // Show the modal
       editItemModal.show();
       
@@ -971,6 +998,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const newPrice = parseFloat(document.getElementById('edit-item-price').value);
         const newQuantity = parseInt(document.getElementById('edit-item-quantity').value);
         const newAlertLevel = parseInt(document.getElementById('edit-item-alert-level').value);
+        // Get item type from radio buttons
+        const newItemType = document.querySelector('input[name="edit-item-type"]:checked').value;
         
         try {
           // Update the item document
@@ -980,6 +1009,7 @@ document.addEventListener('DOMContentLoaded', () => {
             description: newDescription,
             price: newPrice,
             alertLevel: newAlertLevel,
+            itemType: newItemType,
             updatedAt: serverTimestamp()
           });
           

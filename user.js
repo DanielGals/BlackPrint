@@ -289,32 +289,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p class="card-text text-muted small">${item.description || 'No description available'}</p>
                     <div class="d-flex justify-content-between align-items-center mb-3">
                       <span class="text-success fw-bold">₱${item.price.toFixed(2)}</span>
+                      ${item.itemType === 'rent' ? '<span class="badge bg-info ms-2">For Rent</span>' : 
+                        '<span class="badge bg-primary ms-2">For Sale</span>'}
                     </div>
-                    ${totalQuantity <= 0 ? 
-                      `<button class="btn btn-secondary w-100 mb-2" disabled>Out of Stock</button>` : 
-                      totalQuantity <= 3 ?
-                      `<button class="btn btn-warning w-100 add-to-cart mb-2"><i class="fas fa-cart-plus"></i> Add to Cart</button>` :
-                      `<button class="btn btn-success w-100 add-to-cart mb-2"><i class="fas fa-cart-plus"></i> Add to Cart</button>`
-                    }
-                    ${totalQuantity <= 0 ? 
-                      `<button class="btn btn-secondary w-100" disabled>Out of Stock</button>` : 
-                      `<button class="btn btn-outline-warning w-100 rent-now"><i class="fas fa-hand-holding-dollar"></i> Rent Now</button>`
+                    ${item.itemType === 'rent' ? 
+                      totalQuantity <= 0 ?
+                        `<button class="btn btn-secondary w-100" disabled>Out of Stock</button>` :
+                        `<button class="btn btn-warning w-100 rent-now"><i class="fas fa-hand-holding-dollar"></i> Rent Now</button>`
+                      :
+                      totalQuantity <= 0 ? 
+                        `<button class="btn btn-secondary w-100" disabled>Out of Stock</button>` :
+                        totalQuantity <= 3 ?
+                          `<button class="btn btn-warning w-100 add-to-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>` :
+                          `<button class="btn btn-success w-100 add-to-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>`
                     }
                   </div>
                 </div>
               `;
               
-              // Add button event listeners if item is in stock (even low stock)
+              // Add button event listeners if item is in stock
               if (totalQuantity > 0) {
-                const addButton = itemCard.querySelector('.add-to-cart');
-                addButton.addEventListener('click', () => {
-                  addToCart(itemId, {...item, quantity: totalQuantity});
-                });
-                
-                const rentButton = itemCard.querySelector('.rent-now');
-                rentButton.addEventListener('click', () => {
-                  addToRent(itemId, {...item, quantity: totalQuantity});
-                });
+                if (item.itemType === 'rent') {
+                  const rentButton = itemCard.querySelector('.rent-now');
+                  if (rentButton) {
+                    rentButton.addEventListener('click', () => {
+                      addToRent(itemId, {...item, quantity: totalQuantity});
+                    });
+                  }
+                } else {
+                  const addButton = itemCard.querySelector('.add-to-cart');
+                  if (addButton) {
+                    addButton.addEventListener('click', () => {
+                      addToCart(itemId, {...item, quantity: totalQuantity});
+                    });
+                  }
+                }
               }
               
               itemsCatalog.appendChild(itemCard);
@@ -693,19 +702,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return; // Exit the function without adding to rent
     }
     
-    // Check if the item is already in rentals
-    const existingItem = rentals.find(rentalItem => rentalItem.id === itemId);
-    let itemQuantity = 1;
+    // Check if the item has a pending rental
+    const pendingRental = rentals.find(rentalItem => 
+      rentalItem.id === itemId && rentalItem.status === 'pending'
+    );
     
-    if (existingItem) {
-      // Show warning notification - can only rent one of each item
+    if (pendingRental) {
+      // Show warning notification - can only rent one of each item if pending
       const warningModal = document.createElement('div');
       warningModal.className = 'notification';
       warningModal.style.backgroundColor = '#fff3cd';
       warningModal.style.color = '#856404';
       warningModal.innerHTML = `
         <i class="fas fa-exclamation-circle"></i>
-        <div>This item is already in your rental list.</div>
+        <div>You already have a pending rental for this item. Please process or cancel it first.</div>
       `;
       document.body.appendChild(warningModal);
       
@@ -717,19 +727,19 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 3000);
       
       return; // Exit without adding more
-    } else {
-      // Add new item to rentals
-      rentals.push({
-        id: itemId,
-        name: item.name,
-        price: item.price,
-        quantity: 1,
-        status: 'pending',
-        dateAdded: new Date().toISOString(),
-        dueDate: null
-      });
     }
-    
+
+    // Add new item to rentals
+    rentals.push({
+      id: itemId,
+      name: item.name,
+      price: item.price,
+      quantity: 1,
+      status: 'pending',
+      dateAdded: new Date().toISOString(),
+      dueDate: null
+    });
+
     // Save rentals to localStorage
     const currentUser = auth.currentUser;
     if (currentUser) {
