@@ -133,9 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // User's cart
   let cart = [];
-  
   // User's rentals
   let rentals = [];
+  // Add a rental cart to store pending rental items
+  let rentalCart = [];
   
   // Check authentication state
   onAuthStateChanged(auth, async (user) => {
@@ -191,17 +192,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
           
-          // Load rentals from localStorage if they exist
-          const savedRentals = localStorage.getItem(`rentals_${user.uid}`);
-          if (savedRentals) {
-            try {
-              rentals = JSON.parse(savedRentals);
-              updateRentBadge();
-            } catch (e) {
-              console.error("Error parsing rentals from localStorage:", e);
-              rentals = [];
-            }
+          // Load rentals from Firestore
+          try {
+            const rentalsQuery = query(collection(db, "rentals"), where("userId", "==", user.uid));
+            const rentalsSnapshot = await getDocs(rentalsQuery);
+            rentals = [];
+            rentalsSnapshot.forEach(doc => {
+              rentals.push({
+                id: doc.id,
+                ...doc.data()
+              });
+            });
+            updateRentBadge();
+            console.log("Rentals loaded from Firestore:", rentals);
+          } catch (e) {
+            console.error("Error fetching rentals from Firestore:", e);
+            rentals = [];
           }
+          
+          // Load rental cart from localStorage if it exists
+          loadRentalCartFromStorage();
+          updateRentBadge();
           
           // Set up search functionality
           const searchInput = document.getElementById('search-items');
@@ -699,53 +710,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }, 3000);
       
-      return; // Exit the function without adding to rent
+      return; // Exit the function without adding to rental cart
     }
     
-    // Check if the item has a pending rental
-    const pendingRental = rentals.find(rentalItem => 
-      rentalItem.id === itemId && rentalItem.status === 'pending'
-    );
+    // Check if the item is already in the rental cart
+    const existingItem = rentalCart.find(rentalItem => rentalItem.itemId === itemId);
     
-    if (pendingRental) {
-      // Show warning notification - can only rent one of each item if pending
-      const warningModal = document.createElement('div');
-      warningModal.className = 'notification';
-      warningModal.style.backgroundColor = '#fff3cd';
-      warningModal.style.color = '#856404';
-      warningModal.innerHTML = `
-        <i class="fas fa-exclamation-circle"></i>
-        <div>You already have a pending rental for this item. Please process or cancel it first.</div>
-      `;
-      document.body.appendChild(warningModal);
+    if (existingItem) {
+      // Check if adding one more would exceed available stock
+      if (existingItem.quantity >= item.quantity) {
+        // Show warning notification
+        const warningModal = document.createElement('div');
+        warningModal.className = 'notification';
+        warningModal.style.backgroundColor = '#fff3cd';
+        warningModal.style.color = '#856404';
+        warningModal.innerHTML = `
+          <i class="fas fa-exclamation-circle"></i>
+          <div>You've reached the maximum available quantity for this item.</div>
+        `;
+        document.body.appendChild(warningModal);
+        
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+          if (document.body.contains(warningModal)) {
+            warningModal.remove();
+          }
+        }, 3000);
+        
+        return; // Exit without adding more
+      }
       
-      // Remove notification after 3 seconds
-      setTimeout(() => {
-        if (document.body.contains(warningModal)) {
-          warningModal.remove();
-        }
-      }, 3000);
-      
-      return; // Exit without adding more
+      // Increase quantity if already in rental cart
+      existingItem.quantity += 1;
+    } else {
+      // Add new item to rental cart
+      rentalCart.push({
+        itemId: itemId,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        maxQuantity: item.quantity,
+        status: 'pending',
+        dateAdded: new Date().toISOString()
+      });
     }
-
-    // Add new item to rentals
-    rentals.push({
-      id: itemId,
-      name: item.name,
-      price: item.price,
-      quantity: 1,
-      status: 'pending',
-      dateAdded: new Date().toISOString(),
-      dueDate: null
-    });
-
-    // Save rentals to localStorage
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      localStorage.setItem(`rentals_${currentUser.uid}`, JSON.stringify(rentals));
-      updateRentBadge();
-    }
+    
+    // Save rental cart to localStorage
+    saveRentalCart();
     
     // Show success notification
     const successModal = document.createElement('div');
@@ -754,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
     successModal.style.color = '#0f5132';
     successModal.innerHTML = `
       <i class="fas fa-check-circle"></i>
-      <div>Added ${item.name} to your rentals</div>
+      <div>Added ${item.name} to your rental cart</div>
     `;
     document.body.appendChild(successModal);
     
@@ -774,7 +785,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Update rent badge to show number of rental items
+  // Function to save rental cart to localStorage
+  function saveRentalCart() {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      localStorage.setItem(`rentalCart_${currentUser.uid}`, JSON.stringify(rentalCart));
+    }
+  }
+  
+  // Function to load rental cart from localStorage
+  function loadRentalCartFromStorage() {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const savedRentalCart = localStorage.getItem(`rentalCart_${currentUser.uid}`);
+      if (savedRentalCart) {
+        try {
+          rentalCart = JSON.parse(savedRentalCart);
+        } catch (e) {
+          console.error("Error parsing rental cart from localStorage:", e);
+          rentalCart = [];
+        }
+      }
+    }
+  }
+  
+  // Update rent badge to show number of rental items (including rental cart)
   function updateRentBadge() {
     const rentMenuItem = document.querySelector('.sidebar-menu li[data-page="rent"]');
     
@@ -782,8 +817,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Check if a badge already exists
       let badge = rentMenuItem.querySelector('.rent-badge');
       
-      // Calculate total rental items
-      const totalItems = rentals.length;
+      // Calculate total rental items (existing rentals + rental cart items)
+      const totalItems = rentals.length + rentalCart.reduce((total, item) => total + item.quantity, 0);
       
       if (totalItems > 0) {
         if (!badge) {
@@ -812,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyRentMessage = document.getElementById('empty-rent-message');
     
     if (rentItemsContainer) {
-      if (rentals.length === 0) {
+      if (rentals.length === 0 && rentalCart.length === 0) {
         rentItemsContainer.innerHTML = '';
         if (emptyRentMessage) {
           emptyRentMessage.style.display = 'block';
@@ -827,192 +862,316 @@ document.addEventListener('DOMContentLoaded', () => {
       
       rentItemsContainer.innerHTML = '';
       
-      rentals.forEach((item, index) => {
-        const rentItem = document.createElement('div');
-        rentItem.className = 'rent-item';
-        
-        // Determine status class
-        let statusClass, statusText;
-        switch(item.status) {
-          case 'active':
-            statusClass = 'active';
-            statusText = 'Active';
-            break;
-          case 'expired':
-            statusClass = 'expired';
-            statusText = 'Expired';
-            break;
-          default: // 'pending' or any other status
-            statusClass = '';
-            statusText = 'Pending';
-        }
-        
-        // Format dates
-        let addedDate = new Date(item.dateAdded).toLocaleDateString();
-        let dueDateStr = item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'Not yet processed';
-        let pickupDateStr = item.pickupDate ? new Date(item.pickupDate).toLocaleDateString() : 'Not specified';
-        
-        // Create the item HTML
-        rentItem.innerHTML = `
-          <div class="rent-item-header">
-            <div class="rent-item-title">${item.name}</div>
-            <span class="rent-status ${statusClass}">${statusText}</span>
-          </div>
-          <div class="row mt-2">
-            <div class="col-md-6">
-              <p class="mb-1 text-muted">Price: To be determined upon pickup</p>
-              ${item.phone ? `<p class="mb-1 text-muted">Contact: ${item.phone}</p>` : ''}
-              ${item.duration ? `<p class="mb-1 text-muted">Duration: ${item.duration} days</p>` : ''}
-              ${item.address ? `<div class="rent-address mb-2"><i class="fas fa-map-marker-alt me-1"></i> ${item.address}</div>` : ''}
-            </div>
-            <div class="col-md-6">
-              ${item.notes ? `<p class="mb-1 text-muted">Notes: ${item.notes}</p>` : ''}
-            </div>
-          </div>
-          <div class="rent-item-details">
-            <div>
-              <small class="text-muted">Date added: ${addedDate}</small><br>
-              ${item.pickupDate ? `<small class="text-muted">Pickup date: ${pickupDateStr}</small><br>` : ''}
-              <small class="text-muted">Due date: ${dueDateStr}</small>
-            </div>
-            <div class="rent-actions">
-              ${item.status === 'pending' ? 
-                `<button class="btn btn-sm btn-warning process-rent-btn"><i class="fas fa-cogs"></i> Process Rent</button>
-                <button class="btn btn-sm btn-danger remove-rent-btn"><i class="fas fa-trash"></i> Remove</button>` : ''}
-              ${item.status === 'active' ? 
-                `<button class="btn btn-sm btn-info view-contract-btn"><i class="fas fa-file-signature"></i> View Contract</button>` : ''}
-            </div>
+      // First, show rental cart items if any exist
+      if (rentalCart.length > 0) {
+        const rentalCartSection = document.createElement('div');
+        rentalCartSection.className = 'rental-cart-section mb-4';
+        rentalCartSection.innerHTML = `
+          <h5 class="mb-3"><i class="fas fa-shopping-basket me-2"></i>Rental Cart</h5>
+          <div class="rental-cart-items"></div>
+          <div class="d-flex justify-content-end mt-3">
+            <button type="button" class="btn btn-warning process-all-rentals">
+              <i class="fas fa-cogs me-2"></i>Process All Items
+            </button>
           </div>
         `;
         
-        // Add event listeners to buttons
-        const removeBtn = rentItem.querySelector('.remove-rent-btn');
-        if (removeBtn) {
+        const rentalCartItems = rentalCartSection.querySelector('.rental-cart-items');
+        
+        rentalCart.forEach((item, index) => {
+          const cartItem = document.createElement('div');
+          cartItem.className = 'rent-item';
+          
+          cartItem.innerHTML = `
+            <div class="rent-item-header">
+              <div class="rent-item-title">${item.name}</div>
+              <span class="rent-status">Pending</span>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-6">
+                <p class="mb-1 text-muted">Price: To be determined upon pickup</p>
+                <p class="mb-1 text-muted">Date added: ${new Date(item.dateAdded).toLocaleDateString()}</p>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-end">
+                  <div class="quantity-control me-3">
+                    <button type="button" class="btn btn-sm btn-outline-secondary decrease-qty"><i class="fas fa-minus"></i></button>
+                    <span class="mx-2">${item.quantity}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary increase-qty" ${item.quantity >= item.maxQuantity ? 'disabled' : ''}><i class="fas fa-plus"></i></button>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-danger remove-item-btn"><i class="fas fa-trash"></i></button>
+                </div>
+              </div>
+            </div>
+          `;
+          
+          // Add event listeners for quantity controls and removal
+          const decreaseBtn = cartItem.querySelector('.decrease-qty');
+          const increaseBtn = cartItem.querySelector('.increase-qty');
+          const removeBtn = cartItem.querySelector('.remove-item-btn');
+          
+          decreaseBtn.addEventListener('click', () => {
+            if (item.quantity > 1) {
+              item.quantity--;
+              saveRentalCart();
+              loadRentals();
+            }
+          });
+          
+          increaseBtn.addEventListener('click', () => {
+            if (item.quantity < item.maxQuantity) {
+              item.quantity++;
+              saveRentalCart();
+              loadRentals();
+            }
+          });
+          
           removeBtn.addEventListener('click', () => {
-            rentals.splice(index, 1);
-            saveRentals();
+            rentalCart.splice(index, 1);
+            saveRentalCart();
             loadRentals(); // Reload rentals
+            updateRentBadge();
           });
-        }
+          
+          rentalCartItems.appendChild(cartItem);
+        });
         
-        const processBtn = rentItem.querySelector('.process-rent-btn');
-        if (processBtn) {
-          processBtn.addEventListener('click', () => {
-            processRental(index);
-          });
-        }
+        // Add process all button event listener
+        const processAllBtn = rentalCartSection.querySelector('.process-all-rentals');
+        processAllBtn.addEventListener('click', () => {
+          processAllRentals();
+        });
         
-        // Add event listener for view contract button
-        const viewContractBtn = rentItem.querySelector('.view-contract-btn');
-        if (viewContractBtn) {
-          viewContractBtn.addEventListener('click', () => {
-            viewRentalContract(index);
-          });
-        }
-        
-        rentItemsContainer.appendChild(rentItem);
-      });
-    }
-  }
-  
-  // Save rentals to localStorage
-  function saveRentals() {
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      localStorage.setItem(`rentals_${currentUser.uid}`, JSON.stringify(rentals));
-      updateRentBadge();
-    }
-  }
-  
-  // Process rental - sets status to active and sets a due date
-  function processRental(index) {
-    if (index >= 0 && index < rentals.length) {
-      const currentItem = rentals[index];
-      
-      // Create Bootstrap modal instance
-      const rentalModal = new bootstrap.Modal(document.getElementById('rentalModal'));
-      
-      // Get current user data to pre-fill the form
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        alert('You must be logged in to process rentals.');
-        return;
+        rentItemsContainer.appendChild(rentalCartSection);
       }
       
-      // Reset form validation state
-      const rentalForm = document.getElementById('rental-form');
-      rentalForm.classList.remove('was-validated');
-      
-      // Clear any previous custom validation messages
-      const phoneInput = document.getElementById('rental-phone');
-      const startDateInput = document.getElementById('rental-start-date');
-      const returnDateInput = document.getElementById('rental-return-date');
-      
-      phoneInput.setCustomValidity('');
-      startDateInput.setCustomValidity('');
-      returnDateInput.setCustomValidity('');
-      
-      // Reset form fields
-      returnDateInput.value = '';
-      startDateInput.value = '';
-      document.getElementById('rental-notes').value = '';
-      document.getElementById('rental-address').value = '';
-      
-      // Hide date error message initially
-      const dateErrorMessage = document.getElementById('date-error-message');
-      dateErrorMessage.classList.remove('date-error-visible');
-      returnDateInput.classList.remove('date-field-invalid');
-      
-      // Pre-fill the form with rental item details
-      document.getElementById('rental-item-name').value = currentItem.name;
-      
-      // Get user data to pre-fill the form
-      getDoc(doc(db, "users", currentUser.uid))
-        .then(docSnap => {
-          if (docSnap.exists()) {
-            const userData = docSnap.data();
-            
-            // Pre-fill personal information
-            document.getElementById('rental-name').value = userData.name || currentUser.displayName || '';
-            document.getElementById('rental-email').value = userData.email || currentUser.email || '';
-            
-            // Pre-fill contact info if it exists in user data
-            if (userData.address) {
-              if (userData.address.phone) {
-                document.getElementById('rental-phone').value = userData.address.phone || '';
-              }
-              
-              // Pre-fill address if it exists
-              if (userData.address.street) {
-                const fullAddress = [
-                  userData.address.street,
-                  userData.address.city,
-                  userData.address.province,
-                  userData.address.zip
-                ].filter(Boolean).join(', ');
-                
-                document.getElementById('rental-address').value = fullAddress || '';
-              }
-            }
-            
-            // Set up event listeners for form validation and submission
-            setupRentalFormListeners(index);
-            
-            // Show the modal
-            rentalModal.show();
-          } else {
-            alert('User information not found. Please contact support.');
+      // Then show existing rentals
+      if (rentals.length > 0) {
+        const existingRentalsSection = document.createElement('div');
+        existingRentalsSection.className = 'active-rentals-section';
+        existingRentalsSection.innerHTML = `<h5 class="mb-3"><i class="fas fa-clipboard-list me-2"></i>Active Rentals</h5>`;
+        rentItemsContainer.appendChild(existingRentalsSection);
+        
+        rentals.forEach((rental, index) => {
+          const rentItem = document.createElement('div');
+          rentItem.className = 'rent-item';
+          
+          // Determine status class
+          let statusClass, statusText;
+          switch(rental.status) {
+            case 'active':
+              statusClass = 'active';
+              statusText = 'Active';
+              break;
+            case 'expired':
+              statusClass = 'expired';
+              statusText = 'Expired';
+              break;
+            default: // 'pending' or any other status
+              statusClass = '';
+              statusText = 'Pending';
           }
-        })
-        .catch(error => {
-          console.error('Error getting user data:', error);
-          alert('Error loading user information. Please try again.');
+          
+          // Format dates
+          let addedDate = new Date(rental.dateAdded).toLocaleDateString();
+          let dueDateStr = rental.dueDate ? new Date(rental.dueDate).toLocaleDateString() : 'Not yet processed';
+          let pickupDateStr = rental.pickupDate ? new Date(rental.pickupDate).toLocaleDateString() : 'Not specified';
+          
+          // Generate the HTML for the items in this rental
+          let itemsHtml = '';
+          if (rental.items && rental.items.length > 0) {
+            itemsHtml = `
+              <div class="mb-2 mt-2">
+                <p class="mb-1 fw-medium">Items:</p>
+                <ul class="mb-1 ps-3">
+                  ${rental.items.map(item => `<li>${item.name} (x${item.quantity})</li>`).join('')}
+                </ul>
+              </div>
+            `;
+          } else {
+            // For backward compatibility with old rentals that might not have the items array
+            itemsHtml = `<p class="mb-1 text-muted">Item: ${rental.name}${rental.quantity > 1 ? ` (x${rental.quantity})` : ''}</p>`;
+          }
+          
+          // Create the item HTML
+          rentItem.innerHTML = `
+            <div class="rent-item-header">
+              <div class="rent-item-title">Rental #${rental.id ? rental.id.substring(0, 8).toUpperCase() : ''}${rental.items ? ` (${rental.items.length} items)` : ''}</div>
+              <span class="rent-status ${statusClass}">${statusText}</span>
+            </div>
+            <div class="row mt-2">
+              <div class="col-md-6">
+                ${itemsHtml}
+                <p class="mb-1 text-muted">Price: To be determined upon pickup</p>
+                ${rental.phone ? `<p class="mb-1 text-muted">Contact: ${rental.phone}</p>` : ''}
+                ${rental.duration ? `<p class="mb-1 text-muted">Duration: ${rental.duration} days</p>` : ''}
+                ${rental.address ? `<div class="rent-address mb-2"><i class="fas fa-map-marker-alt me-1"></i> ${rental.address}</div>` : ''}
+              </div>
+              <div class="col-md-6">
+                ${rental.notes ? `<p class="mb-1 text-muted">Notes: ${rental.notes}</p>` : ''}
+              </div>
+            </div>
+            <div class="rent-item-details">
+              <div>
+                <small class="text-muted">Date added: ${addedDate}</small><br>
+                ${rental.pickupDate ? `<small class="text-muted">Pickup date: ${pickupDateStr}</small><br>` : ''}
+                <small class="text-muted">Due date: ${dueDateStr}</small>
+              </div>
+              <div class="rent-actions">
+                ${rental.status === 'pending' ? 
+                  `<button class="btn btn-sm btn-warning process-rent-btn"><i class="fas fa-cogs"></i> Process Rent</button>
+                  <button class="btn btn-sm btn-danger remove-rent-btn"><i class="fas fa-trash"></i> Remove</button>` : ''}
+                ${rental.status === 'active' ? 
+                  `<button class="btn btn-sm btn-info view-contract-btn"><i class="fas fa-file-signature"></i> View Contract</button>` : ''}
+              </div>
+            </div>
+          `;
+          
+          // Add event listeners to buttons
+          const removeBtn = rentItem.querySelector('.remove-rent-btn');
+          if (removeBtn) {
+            removeBtn.addEventListener('click', () => {
+              rentals.splice(index, 1);
+              saveRentals();
+              loadRentals(); // Reload rentals
+            });
+          }
+          
+          const processBtn = rentItem.querySelector('.process-rent-btn');
+          if (processBtn) {
+            processBtn.addEventListener('click', () => {
+              processRental(index);
+            });
+          }
+          
+          // Add event listener for view contract button
+          const viewContractBtn = rentItem.querySelector('.view-contract-btn');
+          if (viewContractBtn) {
+            viewContractBtn.addEventListener('click', () => {
+              viewRentalContract(index);
+            });
+          }
+          
+          existingRentalsSection.appendChild(rentItem);
         });
+      }
     }
   }
   
-  // Setup event listeners for the rental form
-  function setupRentalFormListeners(rentalIndex) {
+  // Process all rentals in the rental cart
+  function processAllRentals() {
+    if (rentalCart.length === 0) {
+      return;
+    }
+    
+    // Create Bootstrap modal instance
+    const rentalModal = new bootstrap.Modal(document.getElementById('rentalModal'));
+    
+    // Get current user data to pre-fill the form
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      alert('You must be logged in to process rentals.');
+      return;
+    }
+    
+    // Reset form validation state
+    const rentalForm = document.getElementById('rental-form');
+    rentalForm.classList.remove('was-validated');
+    
+    // Clear any previous custom validation messages
+    const phoneInput = document.getElementById('rental-phone');
+    const startDateInput = document.getElementById('rental-start-date');
+    const returnDateInput = document.getElementById('rental-return-date');
+    
+    phoneInput.setCustomValidity('');
+    startDateInput.setCustomValidity('');
+    returnDateInput.setCustomValidity('');
+    
+    // Reset form fields
+    returnDateInput.value = '';
+    startDateInput.value = '';
+    document.getElementById('rental-notes').value = '';
+    document.getElementById('rental-address').value = '';
+    
+    // Hide date error message initially
+    const dateErrorMessage = document.getElementById('date-error-message');
+    dateErrorMessage.classList.remove('date-error-visible');
+    returnDateInput.classList.remove('date-field-invalid');
+    
+    // Create a list of items for display
+    let itemNamesDisplay = "";
+    rentalCart.forEach(item => {
+      itemNamesDisplay += `<li>${item.name} (Quantity: ${item.quantity})</li>`;
+    });
+    
+    // Show multiple items in the form
+    document.getElementById('rental-item-name').value = `Multiple Items (${rentalCart.length})`;
+    
+    // Make sure there's a div to display itemized rental items
+    let itemsListDiv = document.getElementById('rental-items-list');
+    if (!itemsListDiv) {
+      // Create the element if it doesn't exist
+      itemsListDiv = document.createElement('div');
+      itemsListDiv.id = 'rental-items-list';
+      const nameField = document.getElementById('rental-item-name');
+      nameField.parentNode.appendChild(itemsListDiv);
+    }
+    
+    itemsListDiv.innerHTML = `
+      <div class="alert alert-info mt-2">
+        <strong>Items to rent:</strong>
+        <ul class="mb-0 mt-1">
+          ${itemNamesDisplay}
+        </ul>
+      </div>
+    `;
+    
+    // Get user data to pre-fill the form
+    getDoc(doc(db, "users", currentUser.uid))
+      .then(docSnap => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          
+          // Pre-fill personal information
+          document.getElementById('rental-name').value = userData.name || currentUser.displayName || '';
+          document.getElementById('rental-email').value = userData.email || currentUser.email || '';
+          
+          // Pre-fill contact info if it exists in user data
+          if (userData.address) {
+            if (userData.address.phone) {
+              document.getElementById('rental-phone').value = userData.address.phone || '';
+            }
+            
+            // Pre-fill address if it exists
+            if (userData.address.street) {
+              const fullAddress = [
+                userData.address.street,
+                userData.address.city,
+                userData.address.province,
+                userData.address.zip
+              ].filter(Boolean).join(', ');
+              
+              document.getElementById('rental-address').value = fullAddress || '';
+            }
+          }
+          
+          // Set up event listeners for form validation and submission
+          setupRentalFormListenersForMultipleItems();
+          
+          // Show the modal
+          rentalModal.show();
+        } else {
+          alert('User information not found. Please contact support.');
+        }
+      })
+      .catch(error => {
+        console.error('Error getting user data:', error);
+        alert('Error loading user information. Please try again.');
+      });
+  }
+  
+  // Setup event listeners for the rental form - for multiple items
+  function setupRentalFormListenersForMultipleItems() {
     const startDateInput = document.getElementById('rental-start-date');
     const returnDateInput = document.getElementById('rental-return-date');
     const rentalForm = document.getElementById('rental-form');
@@ -1122,38 +1281,80 @@ document.addEventListener('DOMContentLoaded', () => {
       const durationMs = returnDate.getTime() - pickupDate.getTime();
       const durationDays = Math.ceil(durationMs / (1000 * 60 * 60 * 24));
       
-      // Update the rental item with form data
-      rentals[rentalIndex].status = 'active';
-      rentals[rentalIndex].dueDate = returnDate.toISOString();
-      rentals[rentalIndex].pickupDate = pickupDate.toISOString();
-      rentals[rentalIndex].duration = durationDays;
-      rentals[rentalIndex].notes = notes;
-      rentals[rentalIndex].phone = phoneNumber;
-      rentals[rentalIndex].address = address;
+      // Process all items in the rental cart as a single transaction
+      processRentalCartItems(phoneNumber, pickupDate, returnDate, durationDays, notes, address);
+    });
+  }
+  
+  // Function to process all items in the rental cart as a single transaction
+  async function processRentalCartItems(phoneNumber, pickupDate, returnDate, durationDays, notes, address) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    
+    try {
+      // Create a single rental document with all items from the cart
+      const rentalItems = rentalCart.map(item => ({
+        itemId: item.itemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity
+      }));
       
-      // Save rentals to localStorage
-      saveRentals();
+      const newRental = {
+        userId: currentUser.uid,
+        items: rentalItems,  // Store all items in an array
+        status: 'active',
+        dateAdded: new Date().toISOString(),
+        dueDate: returnDate.toISOString(),
+        pickupDate: pickupDate.toISOString(),
+        duration: durationDays,
+        notes: notes,
+        phone: phoneNumber,
+        address: address,
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp()
+      };
+      
+      // Add to Firestore as a single document
+      const newRentalRef = await addDoc(collection(db, "rentals"), newRental);
+      
+      // Add the document ID to the rental object and add to local rentals array
+      const rentalWithId = {
+        id: newRentalRef.id,
+        ...newRental
+      };
+      
+      rentals.push(rentalWithId);
+      
+      // Clear rental cart
+      rentalCart = [];
+      saveRentalCart();
       
       // Hide the rental modal
       const rentalModal = bootstrap.Modal.getInstance(document.getElementById('rentalModal'));
       rentalModal.hide();
       
-      // Populate contract with rental information
-      populateContractWithRentalInfo(rentalIndex);
+      // Generate and display the rental contract
+      populateContractWithRentalInfo(rentals.length - 1);
       
       // Show the contract modal
       const contractModal = new bootstrap.Modal(document.getElementById('contractModal'));
       contractModal.show();
       
-      // Reload rentals list
+      // Update UI
+      updateRentBadge();
       loadRentals();
-    });
+      
+    } catch (error) {
+      console.error("Error processing rental cart:", error);
+      alert("An error occurred while processing your rentals. Please try again.");
+    }
   }
   
   // Function to populate contract with rental information
   function populateContractWithRentalInfo(rentalIndex) {
     if (rentalIndex >= 0 && rentalIndex < rentals.length) {
-      const rentalItem = rentals[rentalIndex];
+      const rental = rentals[rentalIndex];
       
       // Get the contract container
       const contractContainer = document.getElementById('contract-content-container');
@@ -1191,14 +1392,32 @@ document.addEventListener('DOMContentLoaded', () => {
           document.getElementById('contract-number').textContent = contractNumber;
           document.getElementById('contract-name').textContent = document.getElementById('rental-name').value;
           document.getElementById('contract-email').textContent = document.getElementById('rental-email').value;
-          document.getElementById('contract-phone').textContent = rentalItem.phone || document.getElementById('rental-phone').value;
-          document.getElementById('contract-address').textContent = rentalItem.address || document.getElementById('rental-address').value;
+          document.getElementById('contract-phone').textContent = rental.phone || document.getElementById('rental-phone').value;
+          document.getElementById('contract-address').textContent = rental.address || document.getElementById('rental-address').value;
           
-          // Item information
-          document.getElementById('contract-item-name').textContent = rentalItem.name;
-          document.getElementById('contract-start-date').textContent = new Date(rentalItem.pickupDate).toLocaleDateString();
-          document.getElementById('contract-end-date').textContent = new Date(rentalItem.dueDate).toLocaleDateString();
-          document.getElementById('contract-notes').textContent = rentalItem.notes || 'None';
+          // Update equipment information for multiple items
+          const contractItemName = document.getElementById('contract-item-name');
+          if (contractItemName) {
+            if (rental.items && rental.items.length > 0) {
+              // Create an itemized list of rented equipment
+              const itemsList = document.createElement('div');
+              itemsList.innerHTML = `
+                <strong>Multiple Items:</strong>
+                <ul class="mt-2">
+                  ${rental.items.map(item => `<li>${item.name} (Quantity: ${item.quantity})</li>`).join('')}
+                </ul>
+              `;
+              contractItemName.innerHTML = '';
+              contractItemName.appendChild(itemsList);
+            } else {
+              // For backward compatibility with old rentals that might not have the items array
+              contractItemName.textContent = `${rental.name} (Quantity: ${rental.quantity})`;
+            }
+          }
+          
+          document.getElementById('contract-start-date').textContent = new Date(rental.pickupDate).toLocaleDateString();
+          document.getElementById('contract-end-date').textContent = new Date(rental.dueDate).toLocaleDateString();
+          document.getElementById('contract-notes').textContent = rental.notes || 'None';
           
           // Set today's date as the signature date
           document.getElementById('contract-signature-date').textContent = formattedDate;
