@@ -54,7 +54,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle sidebar logout button
     sidebarLogout.addEventListener('click', async () => {
       try {
+        // Clear any user-sensitive data from localStorage
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          localStorage.removeItem(`cart_${currentUser.uid}`);
+          localStorage.removeItem(`rentalCart_${currentUser.uid}`);
+        }
+        
         await signOut(auth);
+        
+        // Replace current history state to prevent going back after logout
+        window.history.replaceState(null, '', 'login.html');
         window.location.href = 'login.html';
       } catch (error) {
         console.error("Error signing out:", error);

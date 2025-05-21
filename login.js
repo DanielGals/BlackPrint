@@ -7,6 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const errorMessage = document.getElementById('error-message');
   const forgotPassword = document.getElementById('forgotPassword');
 
+  // Prevent going back to protected pages after logout
+  window.history.pushState(null, '', window.location.href);
+  window.addEventListener('popstate', function() {
+    window.history.pushState(null, '', window.location.href);
+  });
+
   // Check if user is already logged in
   onAuthStateChanged(auth, async (user) => {
     if (user) {
