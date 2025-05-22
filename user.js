@@ -277,18 +277,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemId = doc.id;
             
             if (item.name.toLowerCase().includes(searchQuery)) {
-              // Get the total quantity from inventory collection
-              const totalQuantity = await getItemTotalQuantity(itemId);
+              // Get raw inventory quantity without considering rentals
+              const rawInventoryQuantity = await getRawInventoryQuantity(itemId);
+              
+              // Get the actual available quantity (considering active rentals)
+              const availableQuantity = await getItemTotalQuantity(itemId);
+              
+              // Calculate how many items are currently rented out
+              const rentedQuantity = rawInventoryQuantity - availableQuantity;
               
               const itemCard = document.createElement('div');
               itemCard.className = 'col-md-6 col-lg-4 col-xl-3';
               
-              // Set badge status based on quantity
+              // Set badge status based on available quantity
               let badgeStatus, badgeText;
-              if (totalQuantity <= 0) {
+              if (availableQuantity <= 0) {
                 badgeStatus = 'bg-danger';
                 badgeText = 'Out of Stock';
-              } else if (totalQuantity <= 3) {
+              } else if (availableQuantity <= 3) {
                 badgeStatus = 'bg-warning';
                 badgeText = 'Low Stock';
               } else {
@@ -304,8 +310,12 @@ document.addEventListener('DOMContentLoaded', () => {
                       <span class="badge ${badgeStatus} me-2">
                         ${badgeText}
                       </span>
-                      <small class="text-muted">${totalQuantity} available</small>
+                      <small class="text-muted">${availableQuantity} available</small>
                     </div>
+                    ${rentedQuantity > 0 ? 
+                    `<div class="text-end mb-2">
+                       <small class="text-info"><i class="fas fa-info-circle"></i> ${rentedQuantity} currently rented</small>
+                     </div>` : ''}
                     <h5 class="card-title">${item.name}</h5>
                     <p class="card-text text-muted small">${item.description || 'No description available'}</p>
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -314,13 +324,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         '<span class="badge bg-primary ms-2">For Sale</span>'}
                     </div>
                     ${item.itemType === 'rent' ? 
-                      totalQuantity <= 0 ?
+                      availableQuantity <= 0 ?
                         `<button class="btn btn-secondary w-100" disabled>Out of Stock</button>` :
                         `<button class="btn btn-warning w-100 rent-now"><i class="fas fa-hand-holding-dollar"></i> Rent Now</button>`
                       :
-                      totalQuantity <= 0 ? 
+                      availableQuantity <= 0 ? 
                         `<button class="btn btn-secondary w-100" disabled>Out of Stock</button>` :
-                        totalQuantity <= 3 ?
+                        availableQuantity <= 3 ?
                           `<button class="btn btn-warning w-100 add-to-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>` :
                           `<button class="btn btn-success w-100 add-to-cart"><i class="fas fa-cart-plus"></i> Add to Cart</button>`
                     }
@@ -329,19 +339,19 @@ document.addEventListener('DOMContentLoaded', () => {
               `;
               
               // Add button event listeners if item is in stock
-              if (totalQuantity > 0) {
+              if (availableQuantity > 0) {
                 if (item.itemType === 'rent') {
                   const rentButton = itemCard.querySelector('.rent-now');
                   if (rentButton) {
                     rentButton.addEventListener('click', () => {
-                      addToRent(itemId, {...item, quantity: totalQuantity});
+                      addToRent(itemId, {...item, quantity: availableQuantity});
                     });
                   }
                 } else {
                   const addButton = itemCard.querySelector('.add-to-cart');
                   if (addButton) {
                     addButton.addEventListener('click', () => {
-                      addToCart(itemId, {...item, quantity: totalQuantity});
+                      addToCart(itemId, {...item, quantity: availableQuantity});
                     });
                   }
                 }
@@ -393,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemQuantity = 1;
     
     if (existingItem) {
-      // Check if adding one more would exceed available stock
+      // Check if adding one more would exceed available stock (which already accounts for active rentals)
       if (existingItem.quantity >= item.quantity) {
         // Show warning notification
         const warningModal = document.createElement('div');
@@ -702,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Add to rent function
   function addToRent(itemId, item) {
-    // Check if the item has zero items in inventory
+    // Check if the item has zero items in inventory (already accounts for active rentals)
     if (item.quantity <= 0) {
       // Show warning notification
       const warningModal = document.createElement('div');
@@ -727,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const existingItem = rentalCart.find(rentalItem => rentalItem.itemId === itemId);
     
     if (existingItem) {
-      // Check if adding one more would exceed available stock
+      // Check if adding one more would exceed available stock (which already accounts for active rentals)
       if (existingItem.quantity >= item.quantity) {
         // Show warning notification
         const warningModal = document.createElement('div');
@@ -1933,8 +1943,51 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Get total quantity for an item from inventory collection
+// Get total quantity for an item from inventory collection, considering active rentals
 async function getItemTotalQuantity(itemId) {
+  try {
+    // Get base inventory quantity
+    const inventoryQuery = query(collection(db, "inventory"), where("itemId", "==", itemId));
+    const inventorySnapshot = await getDocs(inventoryQuery);
+    
+    let totalQuantity = 0;
+    inventorySnapshot.forEach(doc => {
+      totalQuantity += doc.data().quantity;
+    });
+    
+    // Deduct quantities for active rentals
+    const rentalsQuery = query(collection(db, "rentals"), where("status", "==", "active"));
+    const rentalsSnapshot = await getDocs(rentalsQuery);
+    
+    if (!rentalsSnapshot.empty) {
+      rentalsSnapshot.forEach(doc => {
+        const rental = doc.data();
+        
+        // Check for items array (newer format)
+        if (rental.items && Array.isArray(rental.items)) {
+          rental.items.forEach(rentalItem => {
+            if (rentalItem.itemId === itemId) {
+              totalQuantity -= rentalItem.quantity;
+            }
+          });
+        } 
+        // Legacy support for old rental format where single item was directly in the rental doc
+        else if (rental.itemId === itemId) {
+          totalQuantity -= (rental.quantity || 1);
+        }
+      });
+    }
+    
+    // Ensure we don't return negative quantities
+    return Math.max(0, totalQuantity);
+  } catch (error) {
+    console.error(`Error getting quantity for item ${itemId}:`, error);
+    return 0;
+  }
+}
+
+// Get raw inventory quantity without considering rentals
+async function getRawInventoryQuantity(itemId) {
   try {
     const inventoryQuery = query(collection(db, "inventory"), where("itemId", "==", itemId));
     const inventorySnapshot = await getDocs(inventoryQuery);
@@ -1946,7 +1999,7 @@ async function getItemTotalQuantity(itemId) {
     
     return totalQuantity;
   } catch (error) {
-    console.error(`Error getting quantity for item ${itemId}:`, error);
+    console.error(`Error getting raw inventory quantity for item ${itemId}:`, error);
     return 0;
   }
 }
