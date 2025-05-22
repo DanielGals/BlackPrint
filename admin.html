@@ -317,19 +317,102 @@
                </ol>
             </nav>
             <h3 class="mb-4"><i class="fas fa-warehouse me-2"></i>Inventory Management</h3>
-            <div class="card">
-               <div class="card-header bg-light">
-                  <div class="d-flex justify-content-between align-items-center">
-                     <h5 class="mb-0">Inventory Status</h5>
-                     <div class="input-group" style="width: 300px;">
-                        <input type="text" class="form-control" id="inventory-search" placeholder="Search inventory...">
-                        <button class="btn btn-outline-secondary" type="button"><i class="fas fa-search"></i></button>
+            
+            <!-- Inventory Management Tabs -->
+            <ul class="nav nav-tabs mb-4" id="inventoryTabs" role="tablist">
+               <li class="nav-item" role="presentation">
+                  <button class="nav-link active" id="inventory-status-tab" data-bs-toggle="tab" data-bs-target="#inventory-status" type="button" role="tab" aria-controls="inventory-status" aria-selected="true">
+                     <i class="fas fa-boxes me-2"></i>Inventory Status
+                  </button>
+               </li>
+               <li class="nav-item" role="presentation">
+                  <button class="nav-link" id="transaction-history-tab" data-bs-toggle="tab" data-bs-target="#transaction-history" type="button" role="tab" aria-controls="transaction-history" aria-selected="false">
+                     <i class="fas fa-history me-2"></i>Transaction History
+                  </button>
+               </li>
+               <li class="nav-item" role="presentation">
+                  <button class="nav-link" id="restock-items-tab" data-bs-toggle="tab" data-bs-target="#restock-items" type="button" role="tab" aria-controls="restock-items" aria-selected="false">
+                     <i class="fas fa-plus-square me-2"></i>Restock Items
+                  </button>
+               </li>
+            </ul>
+            
+            <!-- Search Input - visible across all tabs -->
+            <div class="input-group mb-4" style="max-width: 500px;">
+               <input type="text" class="form-control" id="inventory-search" placeholder="Search items...">
+               <button class="btn btn-outline-secondary" type="button">
+                  <i class="fas fa-search"></i>
+               </button>
+            </div>
+            
+            <!-- Tab Content -->
+            <div class="tab-content" id="inventoryTabsContent">
+               <!-- Inventory Status Tab -->
+               <div class="tab-pane fade show active" id="inventory-status" role="tabpanel" aria-labelledby="inventory-status-tab">
+                  <div class="card">
+                     <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                           <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Inventory Status</h5>
+                        </div>
+                     </div>
+                     <div class="card-body">
+                        <div class="inventory-list table-responsive">
+                           <!-- Inventory list will be dynamically inserted here -->
+                        </div>
                      </div>
                   </div>
                </div>
-               <div class="card-body">
-                  <div class="inventory-list table-responsive">
-                     <!-- Inventory list will be dynamically inserted here -->
+               
+               <!-- Transaction History Tab -->
+               <div class="tab-pane fade" id="transaction-history" role="tabpanel" aria-labelledby="transaction-history-tab">
+                  <div class="card">
+                     <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                           <h5 class="mb-0"><i class="fas fa-history me-2"></i>Transaction History</h5>
+                           <div>
+                              <select id="transaction-filter" class="form-select form-select-sm">
+                                 <option value="all">All Transactions</option>
+                                 <option value="edit">Adjustments (Edit)</option>
+                                 <option value="order">Order Transactions</option>
+                                 <option value="cancelled_order">Returns (Cancelled Orders)</option>
+                                 <option value="restock">Restocks</option>
+                              </select>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="card-body">
+                        <div class="transaction-history-list table-responsive">
+                           <!-- Transaction history will be dynamically inserted here -->
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               
+               <!-- Restock Items Tab -->
+               <div class="tab-pane fade" id="restock-items" role="tabpanel" aria-labelledby="restock-items-tab">
+                  <div class="card">
+                     <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                           <h5 class="mb-0"><i class="fas fa-plus-square me-2"></i>Restock Items</h5>
+                           <div>
+                              <select id="restock-filter" class="form-select form-select-sm">
+                                 <option value="all">All Items</option>
+                                 <option value="out_of_stock">Out of Stock</option>
+                                 <option value="low_stock">Low Stock</option>
+                              </select>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="card-body">
+                        <div class="restock-list table-responsive">
+                           <!-- Restock form will be dynamically inserted here -->
+                        </div>
+                        <div class="mt-4">
+                           <button id="bulk-restock-btn" class="btn btn-primary">
+                              <i class="fas fa-boxes me-2"></i>Process Bulk Restock
+                           </button>
+                        </div>
+                     </div>
                   </div>
                </div>
             </div>

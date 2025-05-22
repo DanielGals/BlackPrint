@@ -47,6 +47,34 @@ document.addEventListener('DOMContentLoaded', () => {
       inventorySnapshot.forEach(doc => {
         totalQuantity += doc.data().quantity;
       });
+
+      // Deduct quantities for active rentals
+      try {
+        const activeRentalsQuery = query(
+          collection(db, "rentals"), 
+          where("status", "==", "active")
+        );
+        const activeRentalsSnapshot = await getDocs(activeRentalsQuery);
+        
+        activeRentalsSnapshot.forEach(doc => {
+          const rental = doc.data();
+          // Check if items array exists (new format)
+          if (rental.items && Array.isArray(rental.items)) {
+            rental.items.forEach(item => {
+              if (item.itemId === itemId) {
+                // Deduct the rented quantity from the available total
+                totalQuantity -= item.quantity;
+              }
+            });
+          } 
+          // Legacy support for old rental format
+          else if (rental.itemId === itemId) {
+            totalQuantity -= (rental.quantity || 1);
+          }
+        });
+      } catch (error) {
+        console.error("Error calculating rented items:", error);
+      }
       
       return totalQuantity;
     } catch (error) {
@@ -1099,22 +1127,74 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load inventory function
   async function loadInventory() {
     const inventoryListDiv = document.querySelector('.inventory-list');
+    const transactionHistoryListDiv = document.querySelector('.transaction-history-list');
+    const restockListDiv = document.querySelector('.restock-list');
     const inventorySearchInput = document.getElementById('inventory-search');
+    const transactionFilterSelect = document.getElementById('transaction-filter');
+    const restockFilterSelect = document.getElementById('restock-filter');
     
-    // Add event listener for automatic search
+    // Initialize any Bootstrap tabs
+    const triggerTabList = [].slice.call(document.querySelectorAll('#inventoryTabs button'));
+    triggerTabList.forEach(function (triggerEl) {
+      const tabTrigger = new bootstrap.Tab(triggerEl);
+      
+      triggerEl.addEventListener('click', function (event) {
+        event.preventDefault();
+        tabTrigger.show();
+      });
+    });
+    
+    // Load initial data for all tabs
+    loadInventoryStatus('');
+    loadTransactionHistory('all', '');
+    loadRestockItems('all', '');
+    
+    // Add event listener for inventory search
     if (inventorySearchInput) {
       inventorySearchInput.addEventListener('input', () => {
-        loadInventoryWithFilter(inventorySearchInput.value.toLowerCase());
+        const searchTerm = inventorySearchInput.value.toLowerCase();
+        const activeTab = document.querySelector('#inventoryTabs button.active').getAttribute('id');
+        
+        if (activeTab === 'inventory-status-tab') {
+          loadInventoryStatus(searchTerm);
+        } else if (activeTab === 'transaction-history-tab') {
+          loadTransactionHistory(transactionFilterSelect.value, searchTerm);
+        } else if (activeTab === 'restock-items-tab') {
+          loadRestockItems(restockFilterSelect.value, searchTerm);
+        }
       });
     }
     
-    // Initial load without filter
-    loadInventoryWithFilter('');
+    // Add event listener for transaction filter
+    if (transactionFilterSelect) {
+      transactionFilterSelect.addEventListener('change', () => {
+        loadTransactionHistory(
+          transactionFilterSelect.value, 
+          inventorySearchInput.value.toLowerCase()
+        );
+      });
+    }
     
-    // Inner function to load inventory with filter
-    async function loadInventoryWithFilter(searchTerm = '') {
+    // Add event listener for restock filter
+    if (restockFilterSelect) {
+      restockFilterSelect.addEventListener('change', () => {
+        loadRestockItems(
+          restockFilterSelect.value,
+          inventorySearchInput.value.toLowerCase()
+        );
+      });
+    }
+    
+    // Add event listener for bulk restock button
+    const bulkRestockBtn = document.getElementById('bulk-restock-btn');
+    if (bulkRestockBtn) {
+      bulkRestockBtn.addEventListener('click', processBulkRestock);
+    }
+    
+    // Inner function to load inventory status with filter
+    async function loadInventoryStatus(searchTerm = '') {
       if (inventoryListDiv) {
-        inventoryListDiv.innerHTML = '<p>Loading inventory...</p>';
+        inventoryListDiv.innerHTML = '<p class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading inventory status...</p></p>';
         
         try {
           const itemsCollection = collection(db, "items");
@@ -1122,14 +1202,16 @@ document.addEventListener('DOMContentLoaded', () => {
           
           if (!itemsSnapshot.empty) {
             const inventoryTable = document.createElement('table');
+            inventoryTable.className = 'table table-hover';
             inventoryTable.innerHTML = `
               <thead>
                 <tr>
                   <th><i class="fas fa-box me-1"></i> Item Name</th>
                   <th><i class="fas fa-cubes me-1"></i> Current Quantity</th>
                   <th><i class="fas fa-exclamation-triangle me-1"></i> Alert Level</th>
+                  <th><i class="fas fa-exchange-alt me-1"></i> Type</th>
                   <th><i class="fas fa-info-circle me-1"></i> Status</th>
-                  <th><i class="fas fa-plus-circle me-1"></i> Actions</th>
+                  <th><i class="fas fa-plus-circle me-1"></i> Quick Restock</th>
                 </tr>
               </thead>
               <tbody>
@@ -1159,6 +1241,14 @@ document.addEventListener('DOMContentLoaded', () => {
               // Item name cell
               const nameCell = document.createElement('td');
               nameCell.textContent = item.name;
+              if (item.description) {
+                const descSpan = document.createElement('span');
+                descSpan.className = 'text-muted small d-block';
+                descSpan.textContent = item.description.length > 50 ? 
+                  item.description.substring(0, 50) + '...' : 
+                  item.description;
+                nameCell.appendChild(descSpan);
+              }
               row.appendChild(nameCell);
               
               // Quantity cell
@@ -1170,6 +1260,15 @@ document.addEventListener('DOMContentLoaded', () => {
               const alertCell = document.createElement('td');
               alertCell.textContent = item.alertLevel;
               row.appendChild(alertCell);
+              
+              // Item type cell
+              const typeCell = document.createElement('td');
+              if (item.itemType === 'rent') {
+                typeCell.innerHTML = '<span class="badge bg-info">For Rent</span>';
+              } else {
+                typeCell.innerHTML = '<span class="badge bg-primary">For Sale</span>';
+              }
+              row.appendChild(typeCell);
               
               // Status cell
               const statusCell = document.createElement('td');
@@ -1185,14 +1284,14 @@ document.addEventListener('DOMContentLoaded', () => {
               }
               row.appendChild(statusCell);
               
-              // Actions cell with restock form
-              const actionsCell = document.createElement('td');
+              // Quick restock cell
+              const restockCell = document.createElement('td');
               
               const restockForm = document.createElement('form');
               restockForm.className = 'restock-form d-flex';
               restockForm.innerHTML = `
                 <input type="number" min="1" value="1" class="restock-quantity form-control me-2" required style="width: 80px;">
-                <button type="submit" class="btn btn-primary btn-sm">Restock</button>
+                <button type="submit" class="btn btn-primary btn-sm">Add</button>
               `;
               
               restockForm.addEventListener('submit', async (e) => {
@@ -1205,21 +1304,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     itemId: itemId,
                     quantity: addQuantity,
                     addedAt: serverTimestamp(),
-                    addedBy: auth.currentUser.uid
+                    addedBy: auth.currentUser.uid,
+                    adjustmentType: 'restock'
                   });
                   
                   // Show success message
                   const successMsg = document.createElement('div');
                   successMsg.className = 'alert alert-success p-1 mt-2';
                   successMsg.textContent = `Added ${addQuantity} units`;
-                  actionsCell.appendChild(successMsg);
+                  restockCell.appendChild(successMsg);
                   
                   // Remove success message after 3 seconds
                   setTimeout(() => {
                     successMsg.remove();
                     
-                    // Reload inventory after success
-                    loadInventoryWithFilter(searchTerm);
+                    // Reload data for all tabs to reflect the new inventory
+                    loadInventoryStatus(searchTerm);
+                    loadTransactionHistory(transactionFilterSelect.value, searchTerm);
+                    loadRestockItems(restockFilterSelect.value, searchTerm);
                     
                     // Update dashboard counts
                     updateDashboardCounts();
@@ -1231,8 +1333,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
               });
               
-              actionsCell.appendChild(restockForm);
-              row.appendChild(actionsCell);
+              restockCell.appendChild(restockForm);
+              row.appendChild(restockCell);
               
               tbody.appendChild(row);
             }
@@ -1244,19 +1346,518 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show message if no items match the search
             if (!foundItems && searchTerm) {
               const noResults = document.createElement('p');
+              noResults.className = 'text-center py-3';
               noResults.textContent = `No inventory items found matching "${searchTerm}"`;
               inventoryListDiv.appendChild(noResults);
             } else if (!foundItems) {
-              inventoryListDiv.innerHTML = '<p>No items found in inventory.</p>';
+              inventoryListDiv.innerHTML = '<p class="text-center py-3">No items found in inventory.</p>';
             }
           } else {
-            inventoryListDiv.innerHTML = '<p>No items found in inventory.</p>';
+            inventoryListDiv.innerHTML = '<p class="text-center py-3">No items found in inventory.</p>';
           }
         } catch (error) {
           console.error("Error loading inventory:", error);
-          inventoryListDiv.innerHTML = `<p class="error-msg">Failed to load inventory: ${error.message}</p>`;
+          inventoryListDiv.innerHTML = `<p class="error-msg text-center py-3">Failed to load inventory: ${error.message}</p>`;
         }
       }
+    }
+    
+    // Function to load transaction history with filters
+    async function loadTransactionHistory(filterType = 'all', searchTerm = '') {
+      if (transactionHistoryListDiv) {
+        transactionHistoryListDiv.innerHTML = '<p class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading transaction history...</p></p>';
+        
+        try {
+          const inventoryCollection = collection(db, "inventory");
+          let inventoryQuery;
+          
+          // Apply filter if it's not 'all'
+          if (filterType !== 'all') {
+            inventoryQuery = query(inventoryCollection, where("adjustmentType", "==", filterType));
+          } else {
+            inventoryQuery = inventoryCollection;
+          }
+          
+          const inventorySnapshot = await getDocs(inventoryQuery);
+          
+          if (!inventorySnapshot.empty) {
+            // Create a lookup of item ids to names for faster reference
+            const itemsMap = {};
+            const itemsCollection = collection(db, "items");
+            const itemsSnapshot = await getDocs(itemsCollection);
+            itemsSnapshot.forEach(doc => {
+              itemsMap[doc.id] = doc.data().name;
+            });
+            
+            // Create an array of all transactions for sorting
+            const transactions = [];
+            for (const doc of inventorySnapshot.docs) {
+              const transaction = {
+                id: doc.id,
+                ...doc.data()
+              };
+              
+              // Check if we need to apply search filter
+              const itemName = itemsMap[transaction.itemId] || 'Unknown Item';
+              if (searchTerm && !itemName.toLowerCase().includes(searchTerm)) {
+                continue;
+              }
+              
+              transactions.push(transaction);
+            }
+            
+            // Get rental transactions if filterType is 'all' or 'rental'
+            if (filterType === 'all' || filterType === 'rental') {
+              const activeRentalsQuery = query(
+                collection(db, "rentals"),
+                where("status", "==", "active")
+              );
+              const activeRentalsSnapshot = await getDocs(activeRentalsQuery);
+              
+              activeRentalsSnapshot.forEach(doc => {
+                const rental = doc.data();
+                
+                // Process each rental as individual transactions
+                if (rental.items && Array.isArray(rental.items)) {
+                  rental.items.forEach(item => {
+                    const itemName = itemsMap[item.itemId] || 'Unknown Item';
+                    
+                    // Apply search filter if present
+                    if (searchTerm && !itemName.toLowerCase().includes(searchTerm)) {
+                      return;
+                    }
+                    
+                    transactions.push({
+                      id: doc.id + '-' + item.itemId,
+                      itemId: item.itemId,
+                      quantity: -item.quantity, // Negative quantity since it's reserved
+                      addedAt: rental.dateAdded ? new Date(rental.dateAdded) : rental.createdAt,
+                      addedBy: rental.userId,
+                      adjustmentType: 'rental',
+                      rentalId: doc.id,
+                      rentalDueDate: rental.dueDate
+                    });
+                  });
+                } 
+                // Legacy support for old rental format
+                else if (rental.itemId) {
+                  const itemName = itemsMap[rental.itemId] || 'Unknown Item';
+                  
+                  // Apply search filter if present
+                  if (searchTerm && !itemName.toLowerCase().includes(searchTerm)) {
+                    return;
+                  }
+                  
+                  transactions.push({
+                    id: doc.id,
+                    itemId: rental.itemId,
+                    quantity: -(rental.quantity || 1), // Negative quantity since it's reserved
+                    addedAt: rental.dateAdded ? new Date(rental.dateAdded) : rental.createdAt,
+                    addedBy: rental.userId,
+                    adjustmentType: 'rental',
+                    rentalId: doc.id,
+                    rentalDueDate: rental.dueDate
+                  });
+                }
+              });
+            }
+            
+            // Sort transactions by date (newest first)
+            transactions.sort((a, b) => {
+              const dateA = a.addedAt ? (a.addedAt.toDate ? a.addedAt.toDate() : new Date(a.addedAt)) : new Date(0);
+              const dateB = b.addedAt ? (b.addedAt.toDate ? b.addedAt.toDate() : new Date(b.addedAt)) : new Date(0);
+              return dateB - dateA;
+            });
+            
+            // Create and populate the table
+            const transactionTable = document.createElement('table');
+            transactionTable.className = 'table table-striped';
+            transactionTable.innerHTML = `
+              <thead>
+                <tr>
+                  <th><i class="fas fa-calendar me-1"></i> Date</th>
+                  <th><i class="fas fa-box me-1"></i> Item</th>
+                  <th><i class="fas fa-sort-numeric-up-alt me-1"></i> Quantity Change</th>
+                  <th><i class="fas fa-user-edit me-1"></i> Modified by</th>
+                  <th><i class="fas fa-tag me-1"></i> Type</th>
+                </tr>
+              </thead>
+              <tbody>
+              </tbody>
+            `;
+            
+            const tbody = transactionTable.querySelector('tbody');
+            
+            // Generate lookup for all users (both admins and regular users)
+            const userNames = {};
+            const usersCollection = collection(db, "users");
+            const usersSnapshot = await getDocs(usersCollection);
+            usersSnapshot.forEach(doc => {
+              userNames[doc.id] = doc.data().name || 'Unknown User';
+            });
+            
+            // Process each transaction
+            for (const transaction of transactions) {
+              const row = document.createElement('tr');
+              
+              // Date cell
+              const dateCell = document.createElement('td');
+              if (transaction.addedAt) {
+                let date;
+                if (transaction.addedAt.toDate) {
+                  date = transaction.addedAt.toDate();
+                } else if (transaction.addedAt instanceof Date) {
+                  date = transaction.addedAt;
+                } else {
+                  date = new Date(transaction.addedAt);
+                }
+                dateCell.textContent = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+              } else {
+                dateCell.textContent = 'Unknown date';
+              }
+              row.appendChild(dateCell);
+              
+              // Item cell
+              const itemCell = document.createElement('td');
+              itemCell.textContent = itemsMap[transaction.itemId] || 'Unknown Item';
+              row.appendChild(itemCell);
+              
+              // Quantity change cell
+              const quantityCell = document.createElement('td');
+              const quantity = transaction.quantity;
+              
+              if (quantity > 0) {
+                quantityCell.innerHTML = `<span class="text-success">+${quantity}</span>`;
+              } else if (quantity < 0) {
+                quantityCell.innerHTML = `<span class="text-danger">${quantity}</span>`;
+              } else {
+                quantityCell.textContent = '0';
+              }
+              row.appendChild(quantityCell);
+              
+              // Modified by cell
+              const modifiedByCell = document.createElement('td');
+              modifiedByCell.textContent = userNames[transaction.addedBy] || 'Unknown User';
+              row.appendChild(modifiedByCell);
+              
+              // Type cell
+              const typeCell = document.createElement('td');
+              let typeClass, typeText;
+              
+              switch(transaction.adjustmentType) {
+                case 'edit':
+                  typeClass = 'bg-warning text-dark';
+                  typeText = 'Manual Edit';
+                  break;
+                case 'order':
+                  typeClass = 'bg-primary';
+                  typeText = 'Order';
+                  break;
+                case 'cancelled_order':
+                  typeClass = 'bg-info';
+                  typeText = 'Order Return';
+                  break;
+                case 'restock':
+                  typeClass = 'bg-success';
+                  typeText = 'Restock';
+                  break;
+                case 'rental':
+                  typeClass = 'bg-info';
+                  typeText = 'Rental';
+                  break;
+                default:
+                  typeClass = 'bg-secondary';
+                  typeText = transaction.adjustmentType || 'Initial';
+              }
+              
+              typeCell.innerHTML = `<span class="badge ${typeClass}">${typeText}</span>`;
+              row.appendChild(typeCell);
+              
+              tbody.appendChild(row);
+            }
+            
+            transactionHistoryListDiv.innerHTML = '';
+            transactionHistoryListDiv.appendChild(transactionTable);
+            
+            // Show message if no transactions
+            if (transactions.length === 0) {
+              let message = 'No transactions found';
+              if (searchTerm) {
+                message += ` matching "${searchTerm}"`;
+              }
+              if (filterType !== 'all') {
+                message += ` with filter type "${filterType}"`;
+              }
+              transactionHistoryListDiv.innerHTML = `<p class="text-center py-3">${message}</p>`;
+            }
+            
+          } else {
+            transactionHistoryListDiv.innerHTML = '<p class="text-center py-3">No inventory transactions found.</p>';
+          }
+        } catch (error) {
+          console.error("Error loading transaction history:", error);
+          transactionHistoryListDiv.innerHTML = `<p class="error-msg text-center py-3">Failed to load transaction history: ${error.message}</p>`;
+        }
+      }
+    }
+    
+    // Function to load restock items tab with filters
+    async function loadRestockItems(filterType = 'all', searchTerm = '') {
+      if (restockListDiv) {
+        restockListDiv.innerHTML = '<p class="text-center py-3"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading restock items...</p></p>';
+        
+        try {
+          const itemsCollection = collection(db, "items");
+          const itemsSnapshot = await getDocs(itemsCollection);
+          
+          if (!itemsSnapshot.empty) {
+            // Create restock form table
+            const restockTable = document.createElement('table');
+            restockTable.className = 'table table-hover';
+            restockTable.innerHTML = `
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="select-all-items" class="form-check-input"></th>
+                  <th><i class="fas fa-box me-1"></i> Item Name</th>
+                  <th><i class="fas fa-cubes me-1"></i> Current Quantity</th>
+                  <th><i class="fas fa-exclamation-triangle me-1"></i> Alert Level</th>
+                  <th><i class="fas fa-info-circle me-1"></i> Status</th>
+                  <th><i class="fas fa-plus-circle me-1"></i> Restock Quantity</th>
+                </tr>
+              </thead>
+              <tbody>
+              </tbody>
+            `;
+            
+            const tbody = restockTable.querySelector('tbody');
+            let foundItems = false;
+            
+            // Process each item
+            for (const itemDoc of itemsSnapshot.docs) {
+              const item = itemDoc.data();
+              const itemId = itemDoc.id;
+              
+              // Calculate total quantity from inventory collection
+              const totalQuantity = await getItemTotalQuantity(itemId);
+              
+              // Apply filters
+              if (
+                (filterType === 'out_of_stock' && totalQuantity > 0) ||
+                (filterType === 'low_stock' && totalQuantity > item.alertLevel) ||
+                (searchTerm && !item.name.toLowerCase().includes(searchTerm))
+              ) {
+                continue;
+              }
+              
+              foundItems = true;
+              
+              const row = document.createElement('tr');
+              
+              // Checkbox cell
+              const checkboxCell = document.createElement('td');
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.className = 'form-check-input item-checkbox';
+              checkbox.dataset.itemId = itemId;
+              checkbox.dataset.itemName = item.name;
+              checkboxCell.appendChild(checkbox);
+              row.appendChild(checkboxCell);
+              
+              // Item name cell
+              const nameCell = document.createElement('td');
+              nameCell.textContent = item.name;
+              row.appendChild(nameCell);
+              
+              // Quantity cell
+              const quantityCell = document.createElement('td');
+              quantityCell.textContent = totalQuantity;
+              row.appendChild(quantityCell);
+              
+              // Alert level cell
+              const alertCell = document.createElement('td');
+              alertCell.textContent = item.alertLevel;
+              row.appendChild(alertCell);
+              
+              // Status cell
+              const statusCell = document.createElement('td');
+              if (totalQuantity <= 0) {
+                statusCell.innerHTML = '<span class="badge bg-danger">Out of Stock</span>';
+              } else if (totalQuantity <= item.alertLevel) {
+                statusCell.innerHTML = '<span class="badge bg-warning text-dark">Low Stock</span>';
+              } else {
+                statusCell.innerHTML = '<span class="badge bg-success">In Stock</span>';
+              }
+              row.appendChild(statusCell);
+              
+              // Restock quantity cell
+              const restockCell = document.createElement('td');
+              const restockInput = document.createElement('input');
+              restockInput.type = 'number';
+              restockInput.min = '1';
+              restockInput.value = '1';
+              restockInput.className = 'form-control restock-item-quantity';
+              restockInput.dataset.itemId = itemId;
+              
+              // Auto-calculate recommended restock quantity based on alert level
+              if (totalQuantity <= 0) {
+                // If out of stock, suggest a quantity to reach alert level + some buffer
+                const suggestedQuantity = item.alertLevel + 5;
+                restockInput.value = suggestedQuantity;
+                
+                // Add a small note about the suggestion
+                const suggestionNote = document.createElement('small');
+                suggestionNote.className = 'text-muted';
+                suggestionNote.textContent = `Suggested quantity to maintain stock level`;
+                restockCell.appendChild(restockInput);
+                restockCell.appendChild(suggestionNote);
+              } else if (totalQuantity <= item.alertLevel) {
+                // If low stock, suggest a quantity to reach above alert level
+                const suggestedQuantity = item.alertLevel - totalQuantity + 5;
+                restockInput.value = suggestedQuantity;
+                restockCell.appendChild(restockInput);
+              } else {
+                restockCell.appendChild(restockInput);
+              }
+              
+              row.appendChild(restockCell);
+              tbody.appendChild(row);
+            }
+            
+            // Replace the loading message with the restock table
+            restockListDiv.innerHTML = '';
+            restockListDiv.appendChild(restockTable);
+            
+            // Add event listener to "select all" checkbox
+            const selectAllCheckbox = document.getElementById('select-all-items');
+            if (selectAllCheckbox) {
+              selectAllCheckbox.addEventListener('change', function() {
+                const isChecked = this.checked;
+                document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+                  checkbox.checked = isChecked;
+                });
+              });
+            }
+            
+            // Show message if no items match the filters
+            if (!foundItems) {
+              let message = 'No items found';
+              if (searchTerm) {
+                message += ` matching "${searchTerm}"`;
+              }
+              if (filterType !== 'all') {
+                message += ` with filter type "${filterType}"`;
+              }
+              restockListDiv.innerHTML = `<p class="text-center py-3">${message}</p>`;
+            }
+          } else {
+            restockListDiv.innerHTML = '<p class="text-center py-3">No items found to restock.</p>';
+          }
+        } catch (error) {
+          console.error("Error loading restock items:", error);
+          restockListDiv.innerHTML = `<p class="error-msg text-center py-3">Failed to load restock items: ${error.message}</p>`;
+        }
+      }
+    }
+    
+    // Process bulk restock
+    async function processBulkRestock() {
+      const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
+      
+      if (selectedCheckboxes.length === 0) {
+        alert("Please select at least one item to restock.");
+        return;
+      }
+      
+      if (!confirm(`Are you sure you want to restock ${selectedCheckboxes.length} items?`)) {
+        return;
+      }
+      
+      // Display loading indicator
+      const bulkRestockBtn = document.getElementById('bulk-restock-btn');
+      const originalBtnText = bulkRestockBtn.innerHTML;
+      bulkRestockBtn.disabled = true;
+      bulkRestockBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+      
+      const restockResults = {
+        success: 0,
+        failed: 0,
+        details: []
+      };
+      
+      // Process each selected item
+      for (const checkbox of selectedCheckboxes) {
+        const itemId = checkbox.dataset.itemId;
+        const itemName = checkbox.dataset.itemName;
+        
+        // Find corresponding quantity input
+        const quantityInput = document.querySelector(`.restock-item-quantity[data-item-id="${itemId}"]`);
+        const quantity = parseInt(quantityInput?.value || 1);
+        
+        if (quantity <= 0) {
+          restockResults.failed++;
+          restockResults.details.push({
+            itemName,
+            success: false,
+            message: 'Invalid quantity'
+          });
+          continue;
+        }
+        
+        try {
+          // Add a new inventory entry for the additional quantity
+          await addDoc(collection(db, "inventory"), {
+            itemId: itemId,
+            quantity: quantity,
+            addedAt: serverTimestamp(),
+            addedBy: auth.currentUser.uid,
+            adjustmentType: 'restock',
+            notes: `Bulk restock of ${quantity} units`
+          });
+          
+          restockResults.success++;
+          restockResults.details.push({
+            itemName,
+            success: true,
+            quantity
+          });
+        } catch (error) {
+          console.error(`Error restocking item ${itemName}:`, error);
+          restockResults.failed++;
+          restockResults.details.push({
+            itemName,
+            success: false,
+            message: error.message
+          });
+        }
+      }
+      
+      // Re-enable button and restore original text
+      bulkRestockBtn.disabled = false;
+      bulkRestockBtn.innerHTML = originalBtnText;
+      
+      // Show results
+      let resultMessage = `Restocking complete: ${restockResults.success} successful, ${restockResults.failed} failed.`;
+      
+      if (restockResults.details.length > 0) {
+        resultMessage += "\n\nDetails:";
+        restockResults.details.forEach(item => {
+          if (item.success) {
+            resultMessage += `\n✅ ${item.itemName}: Added ${item.quantity} units`;
+          } else {
+            resultMessage += `\n❌ ${item.itemName}: ${item.message}`;
+          }
+        });
+      }
+      
+      alert(resultMessage);
+      
+      // Reload data
+      loadInventoryStatus(inventorySearchInput.value.toLowerCase());
+      loadTransactionHistory(transactionFilterSelect.value, inventorySearchInput.value.toLowerCase());
+      loadRestockItems(restockFilterSelect.value, inventorySearchInput.value.toLowerCase());
+      
+      // Update dashboard counts
+      updateDashboardCounts();
     }
   }
   
@@ -1418,6 +2019,7 @@ document.addEventListener('DOMContentLoaded', () => {
               if (!order.totalAmount && !order.total) order.total = 0;
               else if (order.totalAmount && !order.total) order.total = order.totalAmount;
               
+             
               // Set customer information
               if (!order.customer) {
                 if (order.userId) {
