@@ -14,12 +14,19 @@
    <!-- Google Font - Poppins -->
    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
    <!-- Custom CSS file -->
-   <link rel="stylesheet" href="style.css">
-   <style>
+   <link rel="stylesheet" href="style.css">   <style>
       body {
          font-family: 'Poppins', sans-serif;
          overflow-x: hidden;
          background-color: #f8f9fa;
+      }
+      /* Bootstrap Popover Customization */
+      .popover {
+         max-width: 350px;
+         box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+      }
+      .popover-body {
+         padding: 15px;
       }
       .sidebar {
          position: fixed;
@@ -191,7 +198,7 @@
             </div>
             <div class="row">
                <div class="col-md-3 mb-4">
-                  <div class="card h-100">
+                  <div class="card h-100 dashboard-card" data-page="users" style="cursor: pointer;">
                      <div class="card-header bg-primary text-white">
                         <h5 class="card-title mb-0"><i class="fas fa-users me-2"></i> Users</h5>
                      </div>
@@ -202,7 +209,7 @@
                   </div>
                </div>
                <div class="col-md-3 mb-4">
-                  <div class="card h-100">
+                  <div class="card h-100 dashboard-card" data-page="items" style="cursor: pointer;">
                      <div class="card-header bg-success text-white">
                         <h5 class="card-title mb-0"><i class="fas fa-boxes me-2"></i> Products</h5>
                      </div>
@@ -211,26 +218,27 @@
                         <p class="text-muted text-center">Available Items</p>
                      </div>
                   </div>
-               </div>
-               <div class="col-md-3 mb-4">
-                  <div class="card h-100">
+               </div>               <div class="col-md-3 mb-4">
+                  <div id="low-stock-card" class="card h-100 dashboard-card" data-inventory-type="low" style="cursor: pointer;" title="Hover to see low stock items">
                      <div class="card-header bg-warning text-dark">
                         <h5 class="card-title mb-0"><i class="fas fa-exclamation-triangle me-2"></i> Low Stock</h5>
                      </div>
                      <div class="card-body">
                         <h3 class="display-4 text-center" id="low-stock-count">0</h3>
                         <p class="text-muted text-center">Low Stock Items</p>
+                        <small class="text-muted d-block text-center">(Hover for details)</small>
                      </div>
                   </div>
                </div>
                <div class="col-md-3 mb-4">
-                  <div class="card h-100">
+                  <div id="out-of-stock-card" class="card h-100 dashboard-card" data-inventory-type="out" style="cursor: pointer;" title="Hover to see out of stock items">
                      <div class="card-header bg-danger text-white">
                         <h5 class="card-title mb-0"><i class="fas fa-ban me-2"></i> Out of Stock</h5>
                      </div>
                      <div class="card-body">
                         <h3 class="display-4 text-center" id="out-of-stock-count">0</h3>
                         <p class="text-muted text-center">Out of Stock Items</p>
+                        <small class="text-muted d-block text-center">(Hover for details)</small>
                      </div>
                   </div>
                </div>

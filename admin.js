@@ -1884,8 +1884,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     return address || 'No address provided';
   }
-  
-  // Function to update dashboard counts
+    // Function to update dashboard counts
   async function updateDashboardCounts() {
     try {
       // Get users count
@@ -1905,26 +1904,81 @@ document.addEventListener('DOMContentLoaded', () => {
       // Get low stock and out of stock items count
       let lowStockCount = 0;
       let outOfStockCount = 0;
+      const lowStockItems = [];
+      const outOfStockItems = [];
       
       for (const itemDoc of itemsSnapshot.docs) {
         const item = itemDoc.data();
-        const totalQuantity = await getItemTotalQuantity(itemDoc.id);
+        const itemId = itemDoc.id;
+        const totalQuantity = await getItemTotalQuantity(itemId);
         
         if (totalQuantity <= 0) {
           outOfStockCount++;
+          outOfStockItems.push({ 
+            id: itemId,
+            name: item.name, 
+            quantity: totalQuantity,
+            alertLevel: item.alertLevel
+          });
         } else if (totalQuantity <= item.alertLevel) {
           lowStockCount++;
+          lowStockItems.push({ 
+            id: itemId,
+            name: item.name, 
+            quantity: totalQuantity,
+            alertLevel: item.alertLevel
+          });
         }
       }
       
       const lowStockCountElem = document.getElementById('low-stock-count');
+      const lowStockCard = document.getElementById('low-stock-card');
       if (lowStockCountElem) {
         lowStockCountElem.textContent = lowStockCount;
       }
       
+      // Set up low stock tooltip/popover
+      if (lowStockCard && lowStockItems.length > 0) {
+        let lowStockContent = '<div class="dashboard-popover"><h6>Low Stock Items</h6><ul class="list-group">';
+        lowStockItems.forEach(item => {
+          lowStockContent += `<li class="list-group-item d-flex justify-content-between align-items-center">
+            ${item.name} <span class="badge bg-warning text-dark">${item.quantity}/${item.alertLevel}</span></li>`;
+        });
+        lowStockContent += '</ul></div>';
+        
+        // Initialize popover
+        const lowStockPopover = new bootstrap.Popover(lowStockCard, {
+          html: true,
+          trigger: 'hover',
+          content: lowStockContent,
+          placement: 'bottom',
+          container: 'body'
+        });
+      }
+      
       const outOfStockCountElem = document.getElementById('out-of-stock-count');
+      const outOfStockCard = document.getElementById('out-of-stock-card');
       if (outOfStockCountElem) {
         outOfStockCountElem.textContent = outOfStockCount;
+      }
+      
+      // Set up out of stock tooltip/popover
+      if (outOfStockCard && outOfStockItems.length > 0) {
+        let outOfStockContent = '<div class="dashboard-popover"><h6>Out of Stock Items</h6><ul class="list-group">';
+        outOfStockItems.forEach(item => {
+          outOfStockContent += `<li class="list-group-item d-flex justify-content-between align-items-center">
+            ${item.name} <span class="badge bg-danger">0/${item.alertLevel}</span></li>`;
+        });
+        outOfStockContent += '</ul></div>';
+        
+        // Initialize popover
+        const outOfStockPopover = new bootstrap.Popover(outOfStockCard, {
+          html: true,
+          trigger: 'hover',
+          content: outOfStockContent,
+          placement: 'bottom',
+          container: 'body'
+        });
       }
       
       // Get orders counts
@@ -1945,11 +1999,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (pendingOrderCountElem) {
         pendingOrderCountElem.textContent = pendingCount;
       }
-      
-      const completedOrderCountElem = document.getElementById('completed-order-count');
+        const completedOrderCountElem = document.getElementById('completed-order-count');
       if (completedOrderCountElem) {
         completedOrderCountElem.textContent = completedCount;
       }
+      
+      // Initialize dashboard cards if they exist
+      initDashboardCards();
       
     } catch (error) {
       console.error("Error updating dashboard counts:", error);
@@ -2561,9 +2617,71 @@ document.addEventListener('DOMContentLoaded', () => {
           </tr>
         `;
       }
-      
-      // Show the modal
+        // Show the modal
       modal.show();
     }
   }
+  
+  // Initialize dashboard card click functionality
+  function initDashboardCards() {
+    const dashboardCards = document.querySelectorAll('.dashboard-card');
+    
+    dashboardCards.forEach(card => {
+      card.addEventListener('click', () => {
+        // Get the target page from data attribute
+        const targetPage = card.dataset.page;
+        const inventoryType = card.dataset.inventoryType;
+        
+        // Navigate to target page
+        const menuItem = document.querySelector(`.sidebar-menu li[data-page="${targetPage}"]`);
+        if (menuItem) {
+          // First navigate to target page
+          menuItem.click();
+          
+          // Then apply appropriate filter if needed for inventory items
+          if (inventoryType && targetPage === 'inventory') {
+            setTimeout(() => {
+              if (inventoryType === 'low') {
+                const restockTab = document.getElementById('restock-items-tab');
+                if (restockTab) {
+                  restockTab.click();
+                }
+                
+                const restockFilter = document.getElementById('restock-filter');
+                if (restockFilter) {
+                  restockFilter.value = 'low_stock';
+                  // Trigger change event to apply filter
+                  restockFilter.dispatchEvent(new Event('change'));
+                }
+              } else if (inventoryType === 'out') {
+                const restockTab = document.getElementById('restock-items-tab');
+                if (restockTab) {
+                  restockTab.click();
+                }
+                
+                const restockFilter = document.getElementById('restock-filter');
+                if (restockFilter) {
+                  restockFilter.value = 'out_of_stock';
+                  // Trigger change event to apply filter
+                  restockFilter.dispatchEvent(new Event('change'));
+                }
+              }
+            }, 500); // Give time for the inventory page to load
+          }
+        }
+      });
+    });
+  }
+  
+  // Call initDashboardCards after auth state is confirmed and dashboard is visible
+  const initObserver = new MutationObserver((mutations) => {
+    const dashboardPage = document.getElementById('dashboard-page');
+    if (dashboardPage && !dashboardPage.classList.contains('hidden')) {
+      initDashboardCards();
+      initObserver.disconnect(); // No need to observe anymore
+    }
+  });
+  
+  // Start observing the document with the configured parameters
+  initObserver.observe(document.body, { attributes: true, subtree: true });
 });

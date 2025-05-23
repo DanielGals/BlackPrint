@@ -740,6 +740,38 @@ body, html {
   color: #28a745;
 }
 
+/* Dashboard card popovers */
+.dashboard-popover {
+  max-width: 300px;
+}
+
+.dashboard-popover h6 {
+  margin-bottom: 10px;
+  font-weight: 600;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 5px;
+}
+
+.dashboard-popover .list-group {
+  max-height: 250px;
+  overflow-y: auto;
+  margin-bottom: 0;
+}
+
+.dashboard-popover .list-group-item {
+  padding: 5px 10px;
+  font-size: 0.9rem;
+}
+
+.dashboard-card {
+  transition: transform 0.2s;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.15);
+}
+
 /* Custom table styles */
 .item-list table, .user-list table, .inventory-list table {
   width: 100%;
