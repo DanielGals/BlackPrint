@@ -124,12 +124,18 @@ document.addEventListener('DOMContentLoaded', () => {
           pageContainers.forEach(container => {
             container.classList.add('hidden');
           });
-          
-          // Show the selected page container
+            // Show the selected page container
           const pageName = item.getAttribute('data-page');
           const pageToShow = document.getElementById(`${pageName}-page`);
           if (pageToShow) {
             pageToShow.classList.remove('hidden');
+            
+            // Initialize page specific functionality
+            switch (pageName) {
+              case 'sales':
+                loadSales();
+                break;
+            }
           }
         });
       }
@@ -254,8 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dashboardPage = document.getElementById('dashboard-page');
             const dashboardContent = dashboardPage.querySelector('.content');
             dashboardContent.appendChild(userInfoDiv);
-            
-            // Fetch users for user management page
+              // Fetch users for user management page
             loadUsers(userData.user_type === 'super_admin');
             
             // Initialize items page
@@ -266,6 +271,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Initialize orders page
             loadOrders();
+            
+            // Initialize sales page
+            loadSales();
             
             // Update dashboard counts
             updateDashboardCounts();
@@ -2684,4 +2692,329 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Start observing the document with the configured parameters
   initObserver.observe(document.body, { attributes: true, subtree: true });
+    // Load and analyze sales data
+  async function loadSales() {
+    const salesListDiv = document.querySelector('.sales-list');
+    const filterSalesBtn = document.getElementById('filter-sales-btn');
+    const startDateInput = document.getElementById('sales-date-start');
+    const endDateInput = document.getElementById('sales-date-end');
+    
+    // Set default date range (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    startDateInput.valueAsDate = thirtyDaysAgo;
+    endDateInput.valueAsDate = today;
+    
+    // Load initial sales data
+    loadSalesData(startDateInput.value, endDateInput.value);
+    
+    // Add event listener for filter button
+    if (filterSalesBtn) {
+      filterSalesBtn.addEventListener('click', () => {
+        loadSalesData(startDateInput.value, endDateInput.value);
+      });
+    }
+      // Function to load sales data with date filters
+    async function loadSalesData(startDate, endDate) {
+      // Show loading state
+      salesListDiv.innerHTML = '<p class="text-center my-4"><div class="spinner-border text-primary" role="status"></div><br><span class="mt-2 d-block">Loading sales data...</span></p>';
+      
+      try {
+        // Convert input strings to date objects for comparison
+        const startDateObj = new Date(startDate);
+        startDateObj.setHours(0, 0, 0, 0);
+        
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        
+        // Fetch item data for later use
+        const itemsMap = {};
+        const itemsSnapshot = await getDocs(collection(db, "items"));
+        itemsSnapshot.forEach(doc => {
+          itemsMap[doc.id] = {
+            id: doc.id,
+            ...doc.data()
+          };
+        });
+        
+        // Query orders from Firestore
+        const ordersQuery = query(
+          collection(db, "orders"),
+          where("status", "in", ["finished", "shipped"])
+        );
+        const ordersSnapshot = await getDocs(ordersQuery);
+        
+        // Also query completed rentals
+        const rentalsQuery = query(
+          collection(db, "rentals"),
+          where("status", "in", ["completed", "finished"])
+        );
+        const rentalsSnapshot = await getDocs(rentalsQuery);
+        
+        // Initialize arrays and counters
+        const filteredOrders = [];
+        let totalSales = 0;
+        let totalOrderItems = 0;
+        
+        // Process regular order sales
+        ordersSnapshot.forEach(doc => {
+          const orderData = doc.data();
+          let orderDate;
+          
+          // Handle different date formats in orders
+          if (orderData.createdAt) {
+            if (orderData.createdAt.toDate) {
+              // Firestore timestamp
+              orderDate = orderData.createdAt.toDate();
+            } else if (orderData.createdAt.seconds) {
+              // Timestamp object
+              orderDate = new Date(orderData.createdAt.seconds * 1000);
+            } else {
+              // Try to parse as date string
+              orderDate = new Date(orderData.createdAt);
+            }
+          } else {
+            // If no date found, use current date
+            orderDate = new Date();
+          }
+          
+          // Check if order is within date range
+          if (orderDate >= startDateObj && orderDate <= endDateObj) {
+            // Calculate order amount properly from items if available
+            let orderAmount = 0;
+            let itemCount = 0;
+            
+            // Calculate from items array if it exists
+            if (orderData.items && Array.isArray(orderData.items)) {
+              orderData.items.forEach(item => {
+                const quantity = parseInt(item.quantity || 1);
+                const price = parseFloat(item.price || 0);
+                orderAmount += quantity * price;
+                itemCount += quantity;
+              });
+              totalOrderItems += itemCount;
+            } 
+            // Fallback to total field if items array is not available or empty
+            else if (orderData.total) {
+              orderAmount = parseFloat(orderData.total);
+              itemCount = 1; // Assume at least one item
+              totalOrderItems += 1;
+            }
+            
+            totalSales += orderAmount;
+            
+            // Add to filtered orders
+            filteredOrders.push({
+              id: doc.id,
+              date: orderDate,
+              customer: orderData.customer?.name || orderData.userName || 'Anonymous',
+              amount: orderAmount,
+              status: orderData.status || 'unknown',
+              type: 'order',
+              itemCount
+            });
+          }
+        });
+        
+        // Process rental sales
+        rentalsSnapshot.forEach(doc => {
+          const rentalData = doc.data();
+          let rentalDate;
+          let rentalAmount = 0;
+          let itemCount = 0;
+          
+          // Handle different date formats in rentals
+          if (rentalData.completedDate) {
+            if (rentalData.completedDate.toDate) {
+              rentalDate = rentalData.completedDate.toDate();
+            } else {
+              rentalDate = new Date(rentalData.completedDate);
+            }
+          } else if (rentalData.dateCompleted) {
+            rentalDate = new Date(rentalData.dateCompleted);
+          } else if (rentalData.createdAt) {
+            if (rentalData.createdAt.toDate) {
+              rentalDate = rentalData.createdAt.toDate();
+            } else {
+              rentalDate = new Date(rentalData.createdAt);
+            }
+          } else if (rentalData.dateAdded) {
+            rentalDate = new Date(rentalData.dateAdded);
+          } else {
+            rentalDate = new Date();
+          }
+          
+          // Check if rental is within date range
+          if (rentalDate >= startDateObj && rentalDate <= endDateObj) {
+            // Calculate rental amount
+            if (rentalData.finalAmount) {
+              rentalAmount = parseFloat(rentalData.finalAmount);
+            } else if (rentalData.totalAmount) {
+              rentalAmount = parseFloat(rentalData.totalAmount);
+            } else if (rentalData.depositAmount) {
+              rentalAmount = parseFloat(rentalData.depositAmount);
+            }
+            
+            // Count items in rental
+            if (rentalData.items && Array.isArray(rentalData.items)) {
+              rentalData.items.forEach(item => {
+                itemCount += parseInt(item.quantity || 1);
+              });
+            } else if (rentalData.itemId) {
+              // Old rental format with single item
+              itemCount = parseInt(rentalData.quantity || 1);
+            }
+            
+            totalOrderItems += itemCount;
+            totalSales += rentalAmount;
+            
+            // Add to filtered orders
+            filteredOrders.push({
+              id: doc.id,
+              date: rentalDate,
+              customer: rentalData.customer?.name || rentalData.userName || rentalData.customerName || 'Anonymous',
+              amount: rentalAmount,
+              status: rentalData.status || 'completed',
+              type: 'rental',
+              itemCount
+            });
+          }
+        });
+        
+        // Sort orders by date (newest first)
+        filteredOrders.sort((a, b) => b.date - a.date);
+        
+        // Update summary metrics
+        const totalOrdersCount = filteredOrders.length;
+        const averageOrderValue = totalOrdersCount > 0 ? totalSales / totalOrdersCount : 0;
+        
+        document.getElementById('total-sales-amount').textContent = `₱${totalSales.toFixed(2)}`;
+        document.getElementById('total-orders-count').textContent = totalOrdersCount;
+        document.getElementById('average-order-value').textContent = `₱${averageOrderValue.toFixed(2)}`;
+        
+        // Add the total items sold display if element exists
+        const totalItemsElem = document.getElementById('total-items-sold');
+        if (totalItemsElem) {
+          totalItemsElem.textContent = totalOrderItems;
+        }
+        
+        // Create and populate table
+        if (salesListDiv) {
+          if (filteredOrders.length > 0) {
+            const table = document.createElement('table');
+            table.className = 'table table-striped table-hover';
+            table.innerHTML = `
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th class="text-end">Amount</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            `;
+            
+            const tbody = table.querySelector('tbody');
+            
+            filteredOrders.forEach(order => {
+              const row = document.createElement('tr');
+              
+              // Format date
+              const dateCell = document.createElement('td');
+              const formattedDate = order.date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric'
+              });
+              dateCell.textContent = formattedDate;
+              row.appendChild(dateCell);
+              
+              // Order ID
+              const idCell = document.createElement('td');
+              idCell.textContent = order.id.substring(0, 8) + '...';
+              idCell.title = order.id;
+              row.appendChild(idCell);
+              
+              // Transaction Type
+              const typeCell = document.createElement('td');
+              const typeBadge = document.createElement('span');
+              typeBadge.className = 'badge';
+              
+              if (order.type === 'rental') {
+                typeBadge.classList.add('bg-info');
+                typeBadge.textContent = 'Rental';
+              } else {
+                typeBadge.classList.add('bg-primary');
+                typeBadge.textContent = 'Sale';
+              }
+              
+              typeCell.appendChild(typeBadge);
+              row.appendChild(typeCell);
+              
+              // Customer
+              const customerCell = document.createElement('td');
+              customerCell.textContent = order.customer;
+              row.appendChild(customerCell);
+              
+              // Status
+              const statusCell = document.createElement('td');
+              const statusBadge = document.createElement('span');
+              statusBadge.className = 'badge';
+              
+              switch(order.status) {
+                case 'finished':
+                case 'completed':
+                  statusBadge.classList.add('bg-success');
+                  statusBadge.textContent = 'Completed';
+                  break;
+                case 'shipped':
+                  statusBadge.classList.add('bg-info');
+                  statusBadge.textContent = 'Shipped';
+                  break;
+                default:
+                  statusBadge.classList.add('bg-secondary');
+                  statusBadge.textContent = order.status || 'Unknown';
+              }
+              
+              statusCell.appendChild(statusBadge);
+              row.appendChild(statusCell);
+              
+              // Amount
+              const amountCell = document.createElement('td');
+              amountCell.className = 'text-end';
+              amountCell.textContent = `₱${order.amount.toFixed(2)}`;
+              row.appendChild(amountCell);
+              
+              tbody.appendChild(row);
+            });
+              salesListDiv.innerHTML = '';
+            salesListDiv.appendChild(table);
+            
+            // Update sales count badge
+            const salesCountBadge = document.getElementById('sales-count');
+            if (salesCountBadge) {
+              salesCountBadge.textContent = `${filteredOrders.length} sales`;
+            }
+          } else {
+            salesListDiv.innerHTML = '<div class="alert alert-info">No sales data found for the selected date range.</div>';
+            
+            // Update sales count badge to show zero
+            const salesCountBadge = document.getElementById('sales-count');
+            if (salesCountBadge) {
+              salesCountBadge.textContent = '0 sales';
+            }
+          }
+        }
+        
+      } catch (error) {
+        console.error("Error loading sales data:", error);
+        salesListDiv.innerHTML = `<div class="alert alert-danger">Error loading sales data: ${error.message}</div>`;
+      }
+    }
+  }
 });
